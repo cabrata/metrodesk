@@ -1,5 +1,6 @@
 package com.metrodesk.data
 
+import com.metrodesk.lyrics.LyricsRepository
 import com.metrolist.innertube.models.Album
 import com.metrolist.innertube.models.Artist
 import com.metrolist.innertube.models.SongItem
@@ -85,10 +86,15 @@ data class Settings(
     val ltAutoApproveJoins: Boolean = false,
     val ltAutoApproveSuggestions: Boolean = false,
     val ltSyncVolume: Boolean = false,
-    val lyricsProviders: List<String> = listOf("LrcLib", "YouTube"),
+    val lyricsOrder: List<String> = emptyList(),
+    val lyricsDisabled: Set<String> = setOf("LyricsPlus"),
     val lyricsTextSize: Int = 26,
     val minimizeToTray: Boolean = true,
-)
+) {
+    /** Saved order first, then providers added in later versions. */
+    val lyricsProviderOrder get() = lyricsOrder.filter { it in LyricsRepository.providers } + LyricsRepository.providers.filter { it !in lyricsOrder }
+    val lyricsProviders get() = lyricsProviderOrder.filter { it !in lyricsDisabled }
+}
 
 @Serializable
 data class PersistedQueue(val songs: List<Song> = emptyList(), val index: Int = 0, val positionMs: Long = 0, val title: String? = null)

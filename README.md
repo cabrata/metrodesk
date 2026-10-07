@@ -18,7 +18,7 @@ Metrodesk reuses Metrolist's `innertube` parsing module and InnerTubeX extractio
 - Home feed, Explore (new releases, moods & genres, charts), search with suggestions and filters
 - Albums, artists, playlists, podcasts, "Listen again"
 - Player with queue, shuffle, repeat, radio (endless autoplay), sleep timer, volume normalization
-- Synced lyrics (LrcLib, YouTube Music fallback)
+- Synced lyrics with word-by-word (karaoke) highlighting. Providers like Metrolist: BetterLyrics, LrcLib, KuGou, Paxsenix, LyricsPlus (off by default), Zemer, YouTube subtitles, YouTube Music. They are tried in order with fallback, and you can reorder or toggle them in Settings → Lyrics providers
 - Library: liked songs, history, local playlists, saved albums/artists/playlists
 - Optional YouTube account login (cookie) to see your own library and recommendations
 - Downloads for offline playback
@@ -97,6 +97,7 @@ Requires JDK 21 and VLC 64-bit. Run the Windows installer tasks on Windows, with
 ./gradlew :shared:jvmTest :app:test # parser, validation and codec tests
 ./gradlew :app:playerSmoke         # real native VLC paused-load/play/seek/pause check
 ./gradlew :app:networkSmoke        # live YouTube playback, download and offline playback check
+./gradlew :app:lyricsProbe         # asks every lyrics provider for one song (live network)
 ./gradlew :app:ltProbe             # live host/guest check against configured test server
 ./gradlew :app:togetherAcceptance  # live desktop app ListenTogether + Player acceptance check
 ./gradlew :app:packageDeb          # Linux .deb

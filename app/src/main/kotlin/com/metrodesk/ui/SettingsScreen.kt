@@ -3,7 +3,9 @@ package com.metrodesk.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -127,6 +129,20 @@ fun SettingsScreen() {
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
                 Text("Lyrics text size: ${s.lyricsTextSize} sp", style = MaterialTheme.typography.titleMedium)
                 Slider(s.lyricsTextSize.coerceIn(16, 48).toFloat(), { v -> Stores.settings.update { it.copy(lyricsTextSize = v.toInt()) } }, valueRange = 16f..48f, steps = 31)
+            }
+        }
+        item { HorizontalDivider(Modifier.padding(horizontal = 24.dp)); SectionTitle("Lyrics providers") }
+        item { Text("Tried from top to bottom until one has lyrics for the song.", Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        val order = s.lyricsProviderOrder
+        order.forEachIndexed { i, p ->
+            item(key = "lyrics-$p") {
+                fun move(to: Int) = Stores.settings.update { it.copy(lyricsOrder = order.toMutableList().apply { add(to, removeAt(i)) }) }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(p, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    IconButton({ move(i - 1) }, enabled = i > 0) { Icon(Icons.Default.ArrowUpward, "Move $p up") }
+                    IconButton({ move(i + 1) }, enabled = i < order.lastIndex) { Icon(Icons.Default.ArrowDownward, "Move $p down") }
+                    Switch(p !in s.lyricsDisabled, { on -> Stores.settings.update { it.copy(lyricsDisabled = if (on) it.lyricsDisabled - p else it.lyricsDisabled + p) } })
+                }
             }
         }
         item { HorizontalDivider(Modifier.padding(horizontal = 24.dp)); SectionTitle("Playback") }

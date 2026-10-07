@@ -15,6 +15,18 @@ class SharedTest {
     }
 
     @Test
+    fun parsesWordSyncLrc() {
+        val l = parseLrc("t", "[00:01.00]{agent:v1}Never gonna\n<Ne:1.0:1.2|ver:1.2:1.5|gonna:1.5:2.0>\n[00:01.50]{bg}(ooh)\n<ooh:1.5:1.9>\n[00:03.00]Plain")
+        assertEquals("Never gonna", l.lines[0].text)
+        assertEquals(listOf(1000L, 1200L, 1500L), l.lines[0].words.map { it.startMs })
+        assertEquals(true, l.lines[1].background)
+        assertEquals("(ooh)", l.lines[1].text)
+        assertEquals(1, l.lines[1].words.size)
+        assertEquals(emptyList(), l.lines[2].words)
+        assertEquals(0, l.currentIndex(1700)) // bg line never becomes active
+    }
+
+    @Test
     fun validatesCookie() {
         assertNull(cookieError("a=1; SAPISID=x"))
         assertNotNull(cookieError("SAPISID=x\nEvil: y"))

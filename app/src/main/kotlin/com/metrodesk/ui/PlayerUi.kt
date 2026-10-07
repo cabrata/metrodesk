@@ -64,6 +64,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.withFrameNanos
+import com.metrodesk.shared.LyricWord
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -373,13 +381,16 @@ fun LyricsPanel(modifier: Modifier = Modifier) {
             LazyColumn(Modifier.weight(1f), state = list, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 itemsIndexed(ly.lines) { i, line ->
                     val active = i == current
+                    val dim = MaterialTheme.colorScheme.onSurface.copy(alpha = if (line.background) 0.25f else 0.3f)
+                    val lineStyle = if (line.background) style.copy(fontSize = fontSize * 0.7f, lineHeight = fontSize * 0.9f, fontStyle = FontStyle.Italic) else style
                     Text(
-                        line.text.ifBlank { "♪" },
-                        style = style,
+                        if (active && line.words.isNotEmpty()) karaoke(line.text, line.words, smoothPosition(s.positionMs, s.isPlaying), MaterialTheme.colorScheme.onSurface, dim)
+                        else AnnotatedString(line.text.ifBlank { "♪" }),
+                        style = lineStyle,
                         color = when {
                             active -> MaterialTheme.colorScheme.onSurface
                             i < current -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
-                            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                            else -> dim
                         },
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
                             .clickable(enabled = !guest) { Player.seekTo(line.timeMs); if (!s.isPlaying) Player.play() }
@@ -391,4 +402,41 @@ fun LyricsPanel(modifier: Modifier = Modifier) {
         }
         Text("Source: ${ly.provider}", Modifier.padding(16.dp, 4.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+/** VLC reports time every ~250 ms, so interpolate between reports with the frame clock for smooth word fills. */
+@Composable
+private fun smoothPosition(reported: Long, playing: Boolean): Long {
+    var now by remember { mutableLongStateOf(reported) }
+    LaunchedEffect(reported, playing) {
+        now = reported
+        if (!playing) return@LaunchedEffect
+        // The frame clock has its own time base, so measure from the first frame.
+        val base = withFrameNanos { it }
+        while (true) withFrameNanos { now = reported + (it - base) / 1_000_000 }
+    }
+    return now
+}
+
+/**
+ * Sung words are fully lit, the current word fills left to right by its own timing, the rest stay dim.
+ * Words are located in the line text so syllable splits ("ne|ver") keep the original spacing.
+ */
+private fun karaoke(text: String, words: List<LyricWord>, pos: Long, lit: Color, dim: Color) = buildAnnotatedString {
+    append(text)
+    var cursor = 0
+    var litUntil = 0
+    for (w in words) {
+        val at = text.indexOf(w.text.trim(), cursor).takeIf { it >= 0 } ?: continue
+        val end = at + w.text.trim().length
+        cursor = end
+        litUntil = when {
+            pos >= w.endMs -> end
+            pos < w.startMs -> break
+            // ponytail: fills per character, not per pixel; a gradient brush per glyph would be smoother.
+            else -> at + ((end - at) * (pos - w.startMs) / (w.endMs - w.startMs).coerceAtLeast(1)).toInt()
+        }
+    }
+    addStyle(SpanStyle(color = lit), 0, litUntil)
+    addStyle(SpanStyle(color = dim), litUntil, text.length)
 }

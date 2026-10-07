@@ -4,6 +4,11 @@ import com.metrodesk.data.Song
 import com.metrodesk.shared.Lyrics
 import com.metrodesk.shared.parseLrc
 import com.metrodesk.shared.plainLyrics
+import com.metrolist.kugou.KuGou
+import com.metrolist.music.betterlyrics.BetterLyrics
+import com.metrolist.music.lyrics.LyricsPlusProvider
+import com.metrolist.music.lyrics.ZemerLyricsProvider
+import com.metrolist.paxsenix.Paxsenix
 import com.metrolist.innertube.YouTube
 import com.metrolist.innertube.models.WatchEndpoint
 import io.ktor.client.HttpClient
@@ -16,10 +21,14 @@ import io.ktor.client.request.parameter
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
 object LyricsRepository {
+    /** Same order as Metrolist's default. */
+    val providers = listOf("BetterLyrics", "LrcLib", "KuGou", "Paxsenix", "LyricsPlus", "Zemer", "YouTubeSubtitle", "YouTube")
+
     private val cache = ConcurrentHashMap<String, Lyrics?>()
 
     private val http by lazy {
@@ -41,12 +50,23 @@ object LyricsRepository {
     suspend fun get(song: Song, providers: List<String>): Lyrics? {
         cache[song.id]?.let { return it }
         var result: Lyrics? = null
+        val title = clean(song.title)
+        val artist = song.artists.joinToString()
+        val dur = song.duration ?: -1
         for (p in providers) {
             result = runCatching {
-                when (p) {
-                    "LrcLib" -> lrclib(song)
-                    "YouTube" -> youtube(song)
-                    else -> null
+                withTimeoutOrNull(15_000) {
+                    when (p) {
+                        "LrcLib" -> lrclib(song)
+                        "YouTube" -> youtube(song)
+                        "BetterLyrics" -> lrc(p, BetterLyrics.getLyrics(title, artist, dur, song.album))
+                        "KuGou" -> lrc(p, KuGou.getLyrics(title, artist, dur, song.album))
+                        "Paxsenix" -> lrc(p, Paxsenix.getLyrics(title, artist, dur, song.album))
+                        "LyricsPlus" -> lrc(p, LyricsPlusProvider.getLyrics(song.id, title, artist, dur, song.album))
+                        "Zemer" -> lrc(p, ZemerLyricsProvider.getLyrics(song.id))
+                        "YouTubeSubtitle" -> lrc("YouTube subtitles", YouTube.transcript(song.id))
+                        else -> null
+                    }
                 }
             }.getOrNull()
             if (result != null) break
@@ -54,6 +74,9 @@ object LyricsRepository {
         if (result != null) cache[song.id] = result
         return result
     }
+
+    private fun lrc(provider: String, r: Result<String>): Lyrics? =
+        r.getOrNull()?.takeIf { it.isNotBlank() }?.let { parseLrc(provider, it) }?.takeIf { it.lines.isNotEmpty() }
 
     fun invalidate(id: String) = cache.remove(id)
 

@@ -5,7 +5,9 @@ object Timber {
     @JvmStatic
     var debug: Boolean = System.getenv("METRODESK_DEBUG") != null
 
+    fun v(message: String, vararg args: Any?) = log("D", message, args)
     fun d(message: String, vararg args: Any?) = log("D", message, args)
+    fun d(t: Throwable?, message: String = "", vararg args: Any?) = log("D", "$message ${t?.message}", args)
     fun i(message: String, vararg args: Any?) = log("I", message, args)
     fun w(message: String, vararg args: Any?) = log("W", message, args)
     fun e(message: String, vararg args: Any?) = log("E", message, args)

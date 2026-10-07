@@ -23,6 +23,7 @@ dependencies {
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.client.encoding)
     implementation(libs.ktor.serialization.json)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.ktor)
@@ -82,6 +83,11 @@ tasks.register<JavaExec>("probe") {
 tasks.register<JavaExec>("ltProbe") {
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set("com.metrodesk.LtProbeKt")
+}
+
+tasks.register<JavaExec>("lyricsProbe") {
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.metrodesk.LyricsProbeKt")
 }
 
 tasks.register<JavaExec>("playerSmoke") {
