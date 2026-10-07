@@ -34,8 +34,18 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          choco install vlc wixtoolset --yes --no-progress
           Get-ChildItem 'C:\Program Files (x86)' -Directory -Filter 'WiX Toolset*' | ForEach-Object { "$($_.FullName)\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append }
+          $vlcInstalled = $false
+          for ($i = 1; $i -le 3; $i++) {
+            choco install vlc --yes --no-progress
+            if ($LASTEXITCODE -eq 0) { $vlcInstalled = $true; break }
+            Start-Sleep -Seconds 10
+          }
+          if (-not $vlcInstalled) {
+            $installer = "$env:TEMP\vlc-installer.exe"
+            Invoke-WebRequest -Uri "https://get.videolan.org/vlc/3.0.21/win64/vlc-3.0.21-win64.exe" -OutFile $installer
+            Start-Process -FilePath $installer -ArgumentList "/S" -Wait
+          }
       - name: Test
         shell: bash
         run: bash ./gradlew :shared:jvmTest :app:test :app:playerSmoke --no-daemon
