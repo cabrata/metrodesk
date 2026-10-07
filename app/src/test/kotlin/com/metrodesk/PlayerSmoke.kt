@@ -63,6 +63,7 @@ fun main(args: Array<String>) = runBlocking {
                 }
             }
             println("Live YouTube audio advances in VLC: OK")
+            withTimeout(10_000) { while (Player.state.value.isBuffering) delay(100) }
             Player.pause()
             println("Downloading real audio for offline playback")
             Downloads.download(listOf(online))

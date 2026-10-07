@@ -530,8 +530,8 @@ object Player {
         }
         override fun buffering(mediaPlayer: MediaPlayer, newCache: Float) {
             if (!active(mediaPlayer)) return
+            _state.update { it.copy(isBuffering = newCache < 100f) }
             if (newCache >= 100f) ready(mediaPlayer)
-            else _state.update { it.copy(isBuffering = true) }
         }
         override fun timeChanged(mediaPlayer: MediaPlayer, newTime: Long) {
             if (active(mediaPlayer)) _state.update { it.copy(positionMs = newTime) }
