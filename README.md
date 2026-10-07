@@ -5,6 +5,14 @@ Built with Kotlin, Compose Multiplatform (Material 3) and libVLC.
 
 Metrodesk reuses Metrolist's `innertube` parsing module and InnerTubeX extraction. It is a separate desktop port, not a complete Android feature-for-feature replacement. Linux and Windows share one JVM UI, with portable parsing/validation in Kotlin Multiplatform `shared/commonMain`.
 
+## Screenshots
+
+![Home](docs/screenshots/home.png)
+
+| Search & player | Synced lyrics |
+| --- | --- |
+| ![Search](docs/screenshots/search.png) | ![Player with lyrics](docs/screenshots/player-lyrics.png) |
+
 ## Features
 
 - Home feed, Explore (new releases, moods & genres, charts), search with suggestions and filters
