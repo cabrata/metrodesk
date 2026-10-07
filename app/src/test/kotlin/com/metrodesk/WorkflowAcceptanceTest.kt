@@ -17,6 +17,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
@@ -25,6 +26,7 @@ class WorkflowAcceptanceTest {
 
     @Test
     fun libraryPersistenceAndPlaylistExportImport() {
+        Stores.library.update { it.copy(liked = emptyList(), savedAlbums = emptyList(), savedArtists = emptyList(), savedPlaylists = emptyList(), playlists = emptyList()) }
         val s1 = Song("item0000001", "Song Alpha", listOf("Artist A"), album = "Album A", albumId = "MPREb_A", duration = 180)
         val s2 = Song("item0000002", "Song Beta", listOf("Artist B"), duration = 210)
         Library.clearHistory()
@@ -88,6 +90,7 @@ class WorkflowAcceptanceTest {
 
     @Test
     fun publicInnerTubeBrowseAndSearchContracts() = runBlocking {
+        assumeTrue("Skip live YouTube network test on CI where cloud IPs may be rate-limited", System.getenv("CI") == null)
         val home = YouTube.home().getOrThrow()
         assertTrue("Home feed returned sections", home.sections.isNotEmpty())
 

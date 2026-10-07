@@ -318,7 +318,7 @@ for ($attempt = 1; $attempt -le 5; $attempt++) {
     try {
         $graphics.CopyFromScreen($capX, $capY, 0, 0, [System.Drawing.Size]::new($capW, $capH))
     } catch {
-        Write-Warning "CopyFromScreen error on attempt $attempt: $_"
+        Write-Warning "CopyFromScreen error on attempt ${attempt}: $_"
     }
 
     $colorSet = New-Object 'System.Collections.Generic.HashSet[int]'
@@ -335,7 +335,7 @@ for ($attempt = 1; $attempt -le 5; $attempt++) {
     $graphics.Dispose()
     $bmp.Dispose()
 
-    Write-Host "Attempt $attempt: $distinctColors distinct colors detected in screenshot."
+    Write-Host "Attempt ${attempt}: $distinctColors distinct colors detected in screenshot."
     if ($distinctColors -ge 5) {
         $rendered = $true
         break
