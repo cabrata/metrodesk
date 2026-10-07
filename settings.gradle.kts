@@ -20,5 +20,6 @@ dependencyResolutionManagement {
     }
 }
 
+include(":shared")
 include(":innertube")
 include(":app")

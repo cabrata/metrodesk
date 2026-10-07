@@ -1,0 +1,394 @@
+package com.metrodesk.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Lyrics
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.metrodesk.data.Library
+import com.metrodesk.data.Song
+import com.metrodesk.data.Stores
+import com.metrodesk.lyrics.LyricsRepository
+import com.metrodesk.playback.Downloads
+import com.metrodesk.playback.Player
+import com.metrodesk.playback.PlayerState
+import com.metrodesk.playback.RepeatMode
+import com.metrodesk.shared.Lyrics
+import com.metrodesk.together.ListenTogether
+import com.metrodesk.together.Role
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+/** True when Listen Together makes us a guest: transport controls are host-only. */
+@Composable
+private fun isGuest(): Boolean = ListenTogether.state.collectAsState().value.role == Role.GUEST
+
+/** Seek slider that only commits on release so dragging doesn't spam seeks. */
+@Composable
+private fun SeekBar(s: PlayerState, enabled: Boolean, modifier: Modifier = Modifier) {
+    var dragging by remember(s.current?.id) { mutableStateOf(false) }
+    var dragValue by remember { mutableFloatStateOf(0f) }
+    val dur = s.durationMs.coerceAtLeast(1)
+    val value = if (dragging) dragValue else (s.positionMs.toFloat() / dur).coerceIn(0f, 1f)
+    Column(modifier) {
+        Slider(
+            value = value,
+            onValueChange = { dragging = true; dragValue = it },
+            onValueChangeFinished = { if (enabled && !Player.remoteControlled) Player.seekTo((dragValue * dur).toLong()); dragging = false },
+            enabled = enabled && s.current != null && s.durationMs > 0,
+            modifier = Modifier.height(24.dp),
+        )
+        Row(Modifier.fillMaxWidth()) {
+            Text(formatTime(if (dragging) (dragValue * dur).toLong() else s.positionMs), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.weight(1f))
+            Text(formatTime(s.durationMs), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun Transport(s: PlayerState, guest: Boolean, big: Boolean) {
+    val size = if (big) 64.dp else 44.dp
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (big) 12.dp else 4.dp)) {
+        IconButton(Player::toggleShuffle, enabled = !guest) {
+            Icon(Icons.Default.Shuffle, "Shuffle", tint = if (s.shuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        IconButton(Player::previous, enabled = !guest && s.current != null) { Icon(Icons.Default.SkipPrevious, "Previous") }
+        FilledIconButton(Player::playPause, Modifier.size(size), enabled = !guest && s.current != null) {
+            when {
+                s.isBuffering -> CircularProgressIndicator(Modifier.size(size / 2), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                s.isPlaying -> Icon(Icons.Default.Pause, "Pause", Modifier.size(size / 2))
+                else -> Icon(Icons.Default.PlayArrow, "Play", Modifier.size(size / 2))
+            }
+        }
+        IconButton({ Player.next() }, enabled = !guest && s.hasNext) { Icon(Icons.Default.SkipNext, "Next") }
+        IconButton(Player::cycleRepeat, enabled = !guest) {
+            Icon(
+                if (s.repeat == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, "Repeat: ${s.repeat.name.lowercase()}",
+                tint = if (s.repeat != RepeatMode.OFF) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LikeButton(song: Song) {
+    val lib by Stores.library.state.collectAsState()
+    val liked = lib.liked.any { it.id == song.id }
+    IconButton({ Library.toggleLike(song) }) {
+        Icon(if (liked) Icons.Default.Favorite else Icons.Default.FavoriteBorder, if (liked) "Unlike" else "Like",
+            tint = if (liked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun DownloadButton(song: Song) {
+    val progress by Downloads.progress.collectAsState()
+    val lib by Stores.library.state.collectAsState()
+    val p = progress[song.id]
+    val done = remember(lib.downloaded, song.id) { Downloads.isDownloaded(song.id) }
+    when {
+        p != null -> Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(progress = { p }, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+        }
+        done -> IconButton({ Downloads.delete(song.id) }) { Icon(Icons.Default.DownloadDone, "Remove download", tint = MaterialTheme.colorScheme.primary) }
+        else -> IconButton({ Downloads.download(listOf(song)) }) { Icon(Icons.Default.Download, "Download") }
+    }
+}
+
+@Composable
+private fun VolumeControl(s: PlayerState) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(Player::toggleMute) {
+            Icon(if (s.muted || s.volume == 0) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp, if (s.muted) "Unmute" else "Mute")
+        }
+        Slider(
+            value = if (s.muted) 0f else s.volume / 100f,
+            onValueChange = { Player.setVolume((it * 100).toInt()) },
+            modifier = Modifier.width(110.dp).height(24.dp),
+        )
+    }
+}
+
+@Composable
+private fun SleepTimerButton(s: PlayerState, guest: Boolean) {
+    var open by remember { mutableStateOf(false) }
+    val remaining by produceState<Long?>(null, s.sleepTimerEndsAt) {
+        while (true) {
+            value = s.sleepTimerEndsAt?.let { (it - System.currentTimeMillis()).coerceAtLeast(0) }
+            if (value == null) break
+            delay(1000)
+        }
+    }
+    Box {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton({ open = true }, enabled = !guest || s.sleepTimerEndsAt != null) {
+                Icon(Icons.Default.Bedtime, "Sleep timer", tint = if (s.sleepTimerEndsAt != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            remaining?.let { Text(formatTime(it), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
+        }
+        DropdownMenu(open, { open = false }) {
+            if (!guest) listOf(5, 10, 15, 30, 45, 60, 90).forEach { m ->
+                MenuItem("$m minutes", Icons.Default.Bedtime) { Player.setSleepTimer(m); open = false }
+            }
+            if (s.sleepTimerEndsAt != null) MenuItem("Cancel timer", Icons.Default.Close) { Player.setSleepTimer(null); open = false }
+        }
+    }
+}
+
+@Composable
+private fun GuestBadge() = Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Icon(Icons.Default.Groups, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.tertiary)
+    Text("Host controls playback", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+}
+
+/** Bottom mini player. */
+@Composable
+fun PlayerBar(onOpenFull: () -> Unit, onOpenQueue: () -> Unit, onOpenLyrics: () -> Unit) {
+    val s by Player.state.collectAsState()
+    val guest = isGuest()
+    val song = s.current
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 3.dp) {
+        Column(Modifier.fillMaxWidth()) {
+            s.error?.let { err ->
+                Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.errorContainer).padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(err, Modifier.weight(1f), color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                    TextButton(Player::clearError) { Text("Dismiss") }
+                }
+            }
+            Row(Modifier.fillMaxWidth().height(88.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable(enabled = song != null, onClick = onOpenFull).padding(6.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Thumb(song?.thumbnail, 56.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text(song?.title ?: "Nothing playing", maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
+                        Text(song?.artistText.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (guest) GuestBadge()
+                    }
+                    if (song != null) LikeButton(song)
+                }
+                Column(Modifier.weight(1.4f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Transport(s, guest, big = false)
+                    SeekBar(s, enabled = !guest, Modifier.widthIn(max = 560.dp))
+                }
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onOpenLyrics, enabled = song != null) { Icon(Icons.Default.Lyrics, "Lyrics") }
+                    IconButton(onOpenQueue) { Icon(Icons.AutoMirrored.Filled.QueueMusic, "Queue") }
+                    VolumeControl(s)
+                }
+            }
+        }
+    }
+}
+
+/** Full-screen now playing view with artwork on the left and lyrics/queue on the right. */
+@Composable
+fun FullPlayer(onClose: () -> Unit) {
+    val s by Player.state.collectAsState()
+    val guest = isGuest()
+    var tab by remember { mutableStateOf(0) } // 0 lyrics, 1 queue
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(Modifier.fillMaxSize().padding(24.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClose) { Icon(Icons.Default.ExpandMore, "Close player") }
+                Text(s.queueTitle ?: "Now playing", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (guest) GuestBadge()
+            }
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+                Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    val song = s.current
+                    Thumb(hiRes(song?.thumbnail), 380.dp, RoundedCornerShape(16.dp))
+                    Spacer(Modifier.height(24.dp))
+                    Column(Modifier.widthIn(max = 460.dp).fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(song?.title ?: "Nothing playing", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(song?.artistText.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            if (song != null) { LikeButton(song); DownloadButton(song) }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        SeekBar(s, enabled = !guest)
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Transport(s, guest, big = true) }
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            SleepTimerButton(s, guest)
+                            Spacer(Modifier.weight(1f))
+                            VolumeControl(s)
+                        }
+                    }
+                }
+                Column(Modifier.weight(1f).fillMaxHeight()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton({ tab = 0 }) { Text("Lyrics", fontWeight = if (tab == 0) FontWeight.Bold else FontWeight.Normal) }
+                        TextButton({ tab = 1 }) { Text("Up next", fontWeight = if (tab == 1) FontWeight.Bold else FontWeight.Normal) }
+                    }
+                    if (tab == 0) LyricsPanel() else QueuePanel()
+                }
+            }
+        }
+    }
+}
+
+/** Current queue with click-to-play, reorder and remove (host / solo only). */
+@Composable
+fun QueuePanel(modifier: Modifier = Modifier) {
+    val s by Player.state.collectAsState()
+    val guest = isGuest()
+    val list = rememberLazyListState()
+    LaunchedEffect(s.index) { if (s.index > 0) list.animateScrollToItem((s.index - 1).coerceAtLeast(0)) }
+    Column(modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(s.queueTitle ?: "Queue", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("${s.queue.size} songs", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!guest && s.queue.size > 1) TextButton(Player::clearQueue) { Text("Clear") }
+        }
+        if (s.queue.isEmpty()) return@Column EmptyBox("Queue is empty", Icons.AutoMirrored.Filled.QueueMusic)
+        LazyColumn(state = list) {
+            itemsIndexed(s.queue, key = { i, song -> "$i-${song.id}" }) { i, song ->
+                SongRow(
+                    song,
+                    onClick = { if (!guest) Player.skipTo(i) },
+                    playing = i == s.index,
+                    trailing = if (guest) null else ({
+                        Row {
+                            IconButton({ Player.moveInQueue(i, i - 1) }, enabled = i > 0) { Icon(Icons.Default.ArrowUpward, "Move up", Modifier.size(18.dp)) }
+                            IconButton({ Player.moveInQueue(i, i + 1) }, enabled = i < s.queue.lastIndex) { Icon(Icons.Default.ArrowDownward, "Move down", Modifier.size(18.dp)) }
+                            IconButton({ Player.removeFromQueue(i) }) { Icon(Icons.Default.Close, "Remove from queue", Modifier.size(18.dp)) }
+                        }
+                    }),
+                )
+            }
+        }
+    }
+}
+
+/** Synced lyrics: auto-scrolls to the active line, click a line to seek (host / solo only). */
+@Composable
+fun LyricsPanel(modifier: Modifier = Modifier) {
+    val s by Player.state.collectAsState()
+    val settings by Stores.settings.state.collectAsState()
+    val guest = isGuest()
+    val song = s.current ?: return EmptyBox("Nothing playing", Icons.Default.Lyrics)
+    var reload by remember { mutableStateOf(0) }
+    val lyrics by produceState<Result<Lyrics?>?>(null, song.id, settings.lyricsProviders, reload) {
+        value = null
+        value = try {
+            Result.success(withContext(Dispatchers.IO) { LyricsRepository.get(song, settings.lyricsProviders) })
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            Result.failure(failure)
+        }
+    }
+    val result = lyrics ?: return Loading(modifier)
+    val ly = result.getOrNull()
+    if (ly == null) {
+        return Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(result.exceptionOrNull()?.message?.let { "Couldn't load lyrics: $it" } ?: "No lyrics found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton({ LyricsRepository.invalidate(song.id); reload++ }) { Text("Retry") }
+            }
+        }
+    }
+    val fontSize = settings.lyricsTextSize.sp
+    val style = LyricStyle.copy(fontSize = fontSize, lineHeight = fontSize * 1.3f)
+    Column(modifier.fillMaxSize()) {
+        if (!ly.synced) {
+            SelectionContainer(Modifier.weight(1f)) {
+                LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                    item { Text(ly.plain, style = style.copy(fontWeight = FontWeight.Medium, fontSize = fontSize * 0.75f, lineHeight = fontSize)) }
+                }
+            }
+        } else {
+            val current = ly.currentIndex(s.positionMs)
+            val list = rememberLazyListState()
+            LaunchedEffect(song.id, current) { if (current >= 0) list.animateScrollToItem((current - 2).coerceAtLeast(0)) }
+            LazyColumn(Modifier.weight(1f), state = list, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                itemsIndexed(ly.lines) { i, line ->
+                    val active = i == current
+                    Text(
+                        line.text.ifBlank { "♪" },
+                        style = style,
+                        color = when {
+                            active -> MaterialTheme.colorScheme.onSurface
+                            i < current -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        },
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                            .clickable(enabled = !guest) { Player.seekTo(line.timeMs); if (!s.isPlaying) Player.play() }
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                    )
+                }
+                item { Spacer(Modifier.height(200.dp)) }
+            }
+        }
+        Text("Source: ${ly.provider}", Modifier.padding(16.dp, 4.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
