@@ -1,4 +1,3 @@
-Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 # ponytail: minimal Windows MSI acceptance test using native .NET and Win32 P/Invoke;
@@ -6,8 +5,8 @@ $ErrorActionPreference = "Stop"
 
 # 1. Locate generated MSI package
 $msiDir = Join-Path (Get-Location).Path "app\build\compose\binaries\main\msi"
-$msiFiles = Get-ChildItem -Path $msiDir -Filter "*.msi" -File -ErrorAction SilentlyContinue
-if (-not $msiFiles -or $msiFiles.Count -eq 0) {
+$msiFiles = @(Get-ChildItem -Path $msiDir -Filter "*.msi" -File -ErrorAction SilentlyContinue)
+if ($msiFiles.Count -eq 0) {
     throw "No MSI package found under '$msiDir'. Ensure packageMsi task ran successfully."
 }
 $msiPath = $msiFiles[0].FullName
@@ -46,7 +45,7 @@ $regHives = @(
 $installDir = $null
 foreach ($hive in $regHives) {
     if (Test-Path $hive) {
-        $subkeys = Get-ChildItem -Path $hive -ErrorAction SilentlyContinue
+        $subkeys = @(Get-ChildItem -Path $hive -ErrorAction SilentlyContinue)
         foreach ($sub in $subkeys) {
             $displayName = $sub.GetValue("DisplayName")
             if ($displayName -and $displayName -like "*metrodesk*") {
@@ -88,7 +87,7 @@ Write-Host "Target install directory: $installDir"
 
 $exePath = Join-Path $installDir "metrodesk.exe"
 if (-not (Test-Path $exePath)) {
-    $foundExes = Get-ChildItem -Path $installDir -Filter "metrodesk.exe" -Recurse -File -Depth 2 -ErrorAction SilentlyContinue
+    $foundExes = @(Get-ChildItem -Path $installDir -Filter "metrodesk.exe" -Recurse -File -Depth 2 -ErrorAction SilentlyContinue)
     if ($foundExes -and $foundExes.Count -gt 0) {
         $exePath = $foundExes[0].FullName
     } else {
