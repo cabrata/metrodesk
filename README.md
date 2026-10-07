@@ -90,6 +90,7 @@ Requires JDK 21 and VLC 64-bit. Run the Windows installer tasks on Windows, with
 ./gradlew :app:playerSmoke         # real native VLC paused-load/play/seek/pause check
 ./gradlew :app:networkSmoke        # live YouTube playback, download and offline playback check
 ./gradlew :app:ltProbe             # live host/guest check against configured test server
+./gradlew :app:togetherAcceptance  # live desktop app ListenTogether + Player acceptance check
 ./gradlew :app:packageDeb          # Linux .deb
 ./gradlew :app:packageMsi          # Windows .msi (run on Windows)
 ./gradlew :app:createDistributable # portable app folder

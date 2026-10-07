@@ -98,3 +98,10 @@ tasks.register<JavaExec>("networkSmoke") {
     environment("XDG_DATA_HOME", layout.buildDirectory.dir("network-smoke-data").get().asFile.absolutePath)
     environment("APPDATA", layout.buildDirectory.dir("network-smoke-data").get().asFile.absolutePath)
 }
+
+tasks.register<JavaExec>("togetherAcceptance") {
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.metrodesk.TogetherAcceptanceKt")
+    environment("XDG_DATA_HOME", layout.buildDirectory.dir("together-smoke-data").get().asFile.absolutePath)
+    environment("APPDATA", layout.buildDirectory.dir("together-smoke-data").get().asFile.absolutePath)
+}

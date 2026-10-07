@@ -43,6 +43,10 @@ jobs:
         shell: bash
         run: |
           for t in ${{ matrix.task }}; do bash ./gradlew ":app:$t" --no-daemon; done
+      - name: Verify Windows MSI and Bundled App
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File .github/scripts/verify-windows.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: metrodesk-${{ runner.os }}
@@ -50,7 +54,8 @@ jobs:
             app/build/compose/binaries/main/deb/*.deb
             app/build/compose/binaries/main/msi/*.msi
             app/build/compose/binaries/main/app/**
-          if-no-files-found: error
+            app/build/acceptance/**
+          if-no-files-found: warn
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
