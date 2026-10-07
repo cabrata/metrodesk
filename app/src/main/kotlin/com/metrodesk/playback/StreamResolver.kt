@@ -35,9 +35,9 @@ object StreamResolver {
         }
     }
 
-    suspend fun resolve(videoId: String, quality: AudioQuality = AudioQuality.AUTO, uploaded: Boolean = false): ExtractedStream {
+    suspend fun resolve(videoId: String, quality: AudioQuality = AudioQuality.AUTO, uploaded: Boolean = false, allowBoundedRange: Boolean = true): ExtractedStream {
         val excluded = failedClients[videoId]?.takeIf { System.currentTimeMillis() - it.second < FAILURE_TTL_MS }?.first.orEmpty()
-        val hints = ContentHints(isUploaded = uploaded).withStreamCapabilities(allowHls = false, allowSabr = false, allowBoundedRange = true)
+        val hints = ContentHints(isUploaded = uploaded).withStreamCapabilities(allowHls = false, allowSabr = false, allowBoundedRange = allowBoundedRange)
         return requireNotNull(
             bundle().extractor.extract(
                 videoId = videoId,

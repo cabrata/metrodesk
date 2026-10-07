@@ -426,7 +426,7 @@ object Player {
             local.absolutePath to arrayOf()
         } else {
             val quality = runCatching { AudioQuality.valueOf(Stores.settings.value.audioQuality) }.getOrDefault(AudioQuality.AUTO)
-            val stream = runCatching { StreamResolver.resolve(song.id, quality) }.getOrElse { e ->
+            val stream = runCatching { StreamResolver.resolve(song.id, quality, allowBoundedRange = false) }.getOrElse { e ->
                 if (e is CancellationException) throw e
                 currentCoroutineContext().ensureActive()
                 if (!currentLoad(p, song.id, gen)) return
@@ -440,7 +440,11 @@ object Player {
             gain = if (Stores.settings.value.normalizeVolume) stream.loudnessDb?.let { 10.0.pow(-it / 20.0).coerceAtMost(1.0) } ?: 1.0 else 1.0
             lastClient = stream.clientName
             val ua = stream.headers["User-Agent"]
-            stream.audioUrl to listOfNotNull(ua?.let { ":http-user-agent=$it" }, ":http-reconnect").toTypedArray()
+            stream.audioUrl to listOfNotNull(
+                ua?.let { ":http-user-agent=$it" },
+                stream.headers["Referer"]?.let { ":http-referrer=$it" },
+                ":http-reconnect",
+            ).toTypedArray()
         }
         currentCoroutineContext().ensureActive()
         if (!currentLoad(p, song.id, gen)) return

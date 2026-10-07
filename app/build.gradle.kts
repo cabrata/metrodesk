@@ -53,7 +53,7 @@ compose.desktop {
             description = "Desktop YouTube Music client based on Metrolist"
             vendor = "Metrodesk"
             licenseFile.set(rootProject.file("LICENSE"))
-            modules("java.net.http", "java.sql", "jdk.unsupported", "java.naming")
+            modules("java.net.http", "java.sql", "jdk.unsupported", "java.naming", "jdk.security.auth")
             linux {
                 iconFile.set(project.file("icon.png"))
                 debMaintainer = "metrodesk@caliph.dev"
@@ -89,4 +89,12 @@ tasks.register<JavaExec>("playerSmoke") {
     mainClass.set("com.metrodesk.PlayerSmokeKt")
     environment("XDG_DATA_HOME", layout.buildDirectory.dir("smoke-data").get().asFile.absolutePath)
     environment("APPDATA", layout.buildDirectory.dir("smoke-data").get().asFile.absolutePath)
+}
+
+tasks.register<JavaExec>("networkSmoke") {
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.metrodesk.PlayerSmokeKt")
+    args("network")
+    environment("XDG_DATA_HOME", layout.buildDirectory.dir("network-smoke-data").get().asFile.absolutePath)
+    environment("APPDATA", layout.buildDirectory.dir("network-smoke-data").get().asFile.absolutePath)
 }

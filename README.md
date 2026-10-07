@@ -88,6 +88,7 @@ Requires JDK 21 and VLC 64-bit. Run the Windows installer tasks on Windows, with
 ./gradlew :app:run                 # run
 ./gradlew :shared:jvmTest :app:test # parser, validation and codec tests
 ./gradlew :app:playerSmoke         # real native VLC paused-load/play/seek/pause check
+./gradlew :app:networkSmoke        # live YouTube playback, download and offline playback check
 ./gradlew :app:ltProbe             # live host/guest check against configured test server
 ./gradlew :app:packageDeb          # Linux .deb
 ./gradlew :app:packageMsi          # Windows .msi (run on Windows)
@@ -106,6 +107,12 @@ Project layout:
 ## Differences from Metrolist Android
 
 Not available on desktop yet: Google sign-in through a web page, account sync of likes/playlists back to YouTube, equalizer, crossfade, song recognition, widgets, Discord rich presence, Chromecast.
+
+Some tracks may be unavailable because of YouTube client restrictions, regional rules or authentication requirements. Stream extraction uses direct URLs supported by VLC. It intentionally does not advertise SABR or bounded-range playback support. Downloads can use bounded ranges. The interface is currently English. Windows installers are unsigned, so SmartScreen may display a warning.
+
+## Verification
+
+Linux and Windows CI both run parser/input/codec tests plus native VLC paused buffering, play, seek and pause checks, then build their installers. Linux live checks also covered YouTube playback, downloading and offline playback. A separate two-client live check verifies room creation, join approval and playback messages on the default Listen Together server. Account login needs your own cookie and is not automatically exercised by CI.
 
 ## License
 
