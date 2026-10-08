@@ -249,14 +249,14 @@ fun CollectionHeader(
     onSave: (() -> Unit)? = null,
     extra: (@Composable () -> Unit)? = null,
 ) {
-    Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
-        Thumb(thumbnail, 196.dp, RoundedCornerShape(16.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    @Composable
+    fun Details(modifier: Modifier) {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(title, style = MaterialTheme.typography.headlineLarge, maxLines = 3)
             Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("${songs.size} songs • ${formatTime(songs.sumOf { (it.duration ?: 0) * 1000L })}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (!description.isNullOrBlank()) Text(description, maxLines = 3, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { Player.playQueue(songs, title = title) }, enabled = songs.isNotEmpty()) {
                     Icon(Icons.Default.PlayArrow, null); Spacer(Modifier.width(6.dp)); Text("Play")
                 }
@@ -265,6 +265,15 @@ fun CollectionHeader(
                 IconButton({ Downloads.download(songs) }, enabled = songs.isNotEmpty()) { Icon(Icons.Default.Download, "Download all") }
                 extra?.invoke()
             }
+        }
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(24.dp)) {
+        if (maxWidth < 552.dp) Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
+            Thumb(thumbnail, 196.dp, RoundedCornerShape(16.dp))
+            Details(Modifier.fillMaxWidth())
+        } else Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+            Thumb(thumbnail, 196.dp, RoundedCornerShape(16.dp))
+            Details(Modifier.weight(1f))
         }
     }
 }
@@ -321,18 +330,27 @@ fun ArtistScreen(id: String) {
     if (a == null) return ErrorBox(result?.exceptionOrNull()?.message ?: "Artist unavailable")
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
         item {
-            Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
-                Thumb(a.artist.thumbnail, 200.dp, CircleShape)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            @Composable
+            fun ArtistDetails(modifier: Modifier) {
+                Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(a.artist.title, style = MaterialTheme.typography.headlineLarge)
                     listOfNotNull(a.subscriberCountText, a.monthlyListenerCount).joinToString(" • ").takeIf { it.isNotBlank() }?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         a.artist.playEndpoint?.let { ep -> Button({ Player.startRadio(ep, a.artist.title) }) { Icon(Icons.Default.PlayArrow, null); Text("Play") } }
                         a.artist.shuffleEndpoint?.let { ep -> FilledTonalIconButton({ Player.startRadio(ep, a.artist.title) }) { Icon(Icons.Default.Shuffle, "Shuffle") } }
                         a.artist.radioEndpoint?.let { ep -> IconButton({ Player.startRadio(ep, a.artist.title) }) { Icon(Icons.Default.Radio, "Radio") } }
                         val saved = lib.savedArtists.any { it.id == a.artist.id }
                         IconButton({ Library.toggleSaved("artist", SavedRef(a.artist.id, a.artist.title, null, a.artist.thumbnail)) }) { Icon(if (saved) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Save artist") }
                     }
+                }
+            }
+            BoxWithConstraints(Modifier.fillMaxWidth().padding(24.dp)) {
+                if (maxWidth < 552.dp) Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                    Thumb(a.artist.thumbnail, 200.dp, CircleShape)
+                    ArtistDetails(Modifier.fillMaxWidth())
+                } else Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Thumb(a.artist.thumbnail, 200.dp, CircleShape)
+                    ArtistDetails(Modifier.weight(1f))
                 }
             }
         }

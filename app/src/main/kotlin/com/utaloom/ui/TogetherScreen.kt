@@ -1,7 +1,9 @@
 package com.utaloom.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -97,9 +99,11 @@ private fun ConnectionLine(st: TogetherState, url: String) {
         Connection.ERROR -> "Connection error" to MaterialTheme.colorScheme.error
         Connection.DISCONNECTED -> "Not connected" to MaterialTheme.colorScheme.onSurfaceVariant
     }
-    Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (st.connection == Connection.CONNECTING || st.connection == Connection.RECONNECTING) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-        Text(label, color = color, fontWeight = FontWeight.Medium)
+    FlowRow(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (st.connection == Connection.CONNECTING || st.connection == Connection.RECONNECTING) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+            Text(label, color = color, fontWeight = FontWeight.Medium)
+        }
         Text("• $url (change in Settings)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -170,12 +174,20 @@ private fun JoinRequests(st: TogetherState) = Section("Join requests") {
 
 @Composable
 private fun Suggestions(st: TogetherState) = Section("Suggestions") {
-    st.suggestions.forEach { s ->
-        SongRow(s.track.toSong(), onClick = {}, trailing = {
-            Text("from ${s.from}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            IconButton({ ListenTogether.approveSuggestion(s.id) }) { Icon(Icons.Default.Check, "Approve", tint = MaterialTheme.colorScheme.primary) }
-            IconButton({ ListenTogether.rejectSuggestion(s.id) }) { Icon(Icons.Default.Close, "Reject", tint = MaterialTheme.colorScheme.error) }
-        })
+    BoxWithConstraints {
+        val compact = maxWidth < 500.dp
+        Column {
+            st.suggestions.forEach { s ->
+                SongRow(s.track.toSong(), onClick = {}, extraMenu = if (!compact) null else ({ close ->
+                    MenuItem("Approve from ${s.from}", Icons.Default.Check) { ListenTogether.approveSuggestion(s.id); close() }
+                    MenuItem("Reject from ${s.from}", Icons.Default.Close) { ListenTogether.rejectSuggestion(s.id); close() }
+                }), trailing = if (compact) null else ({
+                    Text("from ${s.from}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    IconButton({ ListenTogether.approveSuggestion(s.id) }) { Icon(Icons.Default.Check, "Approve", tint = MaterialTheme.colorScheme.primary) }
+                    IconButton({ ListenTogether.rejectSuggestion(s.id) }) { Icon(Icons.Default.Close, "Reject", tint = MaterialTheme.colorScheme.error) }
+                }))
+            }
+        }
     }
 }
 
