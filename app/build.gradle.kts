@@ -66,7 +66,7 @@ compose.desktop {
             modules("java.net.http", "java.sql", "jdk.unsupported", "java.naming", "jdk.security.auth")
             linux {
                 iconFile.set(project.file("icon.png"))
-                debMaintainer = "metrodesk@caliph.dev"
+                debMaintainer = "utaloom@caliph.dev"
                 appCategory = "Audio"
                 debPackageVersion = appVersion
             }
