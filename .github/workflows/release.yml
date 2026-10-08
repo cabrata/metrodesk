@@ -1,16 +1,47 @@
 name: Release
 
-# Production release: push a tag like v1.2.3 (git tag v1.2.3 && git push origin v1.2.3).
-# Builds installers with that version, then publishes a GitHub release the in-app update check sees.
+# Automatic production release: bump appVersion in gradle.properties and push to main.
+# If tag v<appVersion> doesn't exist yet, this builds deb/rpm/msi with that version and publishes
+# a GitHub release (creating the tag), which the in-app update check picks up.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+    paths: [gradle.properties]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      release: ${{ steps.v.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(sed -n 's/^appVersion=//p' gradle.properties | tr -d '[:space:]')
+          # MSI and deb need a plain MAJOR.MINOR.PATCH version.
+          [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::appVersion must look like 1.2.3, got '$v'"; exit 1; }
+          echo "tag=v$v" >> "$GITHUB_OUTPUT"
+          if gh release view "v$v" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v$v is already released, nothing to do."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   package:
+    needs: version
+    if: needs.version.outputs.release == 'true'
     strategy:
       matrix:
         include:
@@ -21,11 +52,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Validate tag
-        shell: bash
-        run: |
-          # MSI and deb need a plain MAJOR.MINOR.PATCH version.
-          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Tag must look like v1.2.3, got $GITHUB_REF_NAME"; exit 1; }
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -40,7 +66,7 @@ jobs:
         run: bash ./gradlew :shared:jvmTest :app:test --no-daemon
       - name: Package
         shell: bash
-        run: for t in ${{ matrix.task }}; do bash ./gradlew ":app:$t" -PappVersion="$GITHUB_REF_NAME" --no-daemon; done
+        run: for t in ${{ matrix.task }}; do bash ./gradlew ":app:$t" --no-daemon; done
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ runner.os }}
@@ -51,7 +77,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: package
+    needs: [version, package]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -60,6 +86,9 @@ jobs:
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Metrodesk ${{ needs.version.outputs.tag }}
           files: dist/**/*
           generate_release_notes: true
           make_latest: true

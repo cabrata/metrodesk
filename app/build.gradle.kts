@@ -43,7 +43,7 @@ protobuf {
     }
 }
 
-// Release version from CI (-PappVersion=1.2.3, taken from the v1.2.3 tag). MSI needs MAJOR.MINOR.BUILD numbers.
+// Release version: appVersion in gradle.properties. MSI needs MAJOR.MINOR.BUILD numbers.
 val appVersion = (findProperty("appVersion") as String?)?.removePrefix("v") ?: "1.0.0"
 
 compose.desktop {
