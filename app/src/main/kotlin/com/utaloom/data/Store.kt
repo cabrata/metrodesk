@@ -81,7 +81,7 @@ data class Settings(
     val pauseHistory: Boolean = false,
     val pauseSearchHistory: Boolean = false,
     val proxy: String? = null,
-    val ltServerUrl: String = "wss://metrolist.caliph.dev/ws",
+    val ltServerUrl: String = "wss://utaloom.caliph.dev/ws",
     val ltUsername: String = "",
     val ltAutoApproveJoins: Boolean = false,
     val ltAutoApproveSuggestions: Boolean = false,

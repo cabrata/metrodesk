@@ -69,7 +69,7 @@ class WorkflowAcceptanceTest {
         assertNotNull(serverUrlError("http://example.com"))
         assertNotNull(serverUrlError("wss://example.com:0"))
         assertNotNull(serverUrlError("wss://user:pass@example.com/ws"))
-        assertNull(serverUrlError("wss://metrolist.caliph.dev/ws"))
+        assertNull(serverUrlError("wss://utaloom.caliph.dev/ws"))
 
         assertNotNull(loginCookieError(""))
         assertNotNull(loginCookieError("a=b; c=d"))

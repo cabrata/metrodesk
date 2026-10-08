@@ -32,7 +32,7 @@ private class Peer(name: String, url: String) {
 }
 
 fun main(args: Array<String>) = runBlocking {
-    val url = args.firstOrNull() ?: "wss://metrolist.caliph.dev/ws"
+    val url = args.firstOrNull() ?: "wss://utaloom.caliph.dev/ws"
     val caps = ClientCapabilities.newBuilder().setSupportsProtobuf(true).setSupportsCompression(false).build()
     val host = Peer("host", url).apply { send("client_capabilities", caps); await("server_capabilities") }
     host.send("create_room", CreateRoomPayload.newBuilder().setUsername("probe-host").build())

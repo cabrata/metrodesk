@@ -71,7 +71,7 @@ Packages bundle their own Java runtime.
 Open **Together**, enter a username, then **Create room** and share the code, or **Join room** with a friend's code.
 Everyone in a room must use the same server.
 
-The default server is `wss://metrolist.caliph.dev/ws`. You can change it in **Settings**.
+The default server is `wss://utaloom.caliph.dev/ws`. You can change it in **Settings**.
 
 ## Signing in
 

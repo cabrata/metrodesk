@@ -19,6 +19,9 @@ object Paths {
             val lib = dir.resolve("library.json")
             fun esc(f: File) = f.absolutePath.replace("\\", "\\\\")
             if (lib.isFile) lib.writeText(lib.readText().replace(esc(old), esc(dir)))
+            // Move users still on the old default Listen Together server to the new domain.
+            val settings = dir.resolve("settings.json")
+            if (settings.isFile) settings.writeText(settings.readText().replace("wss://metrolist.caliph.dev/ws", "wss://utaloom.caliph.dev/ws"))
         }
         dir.apply { mkdirs() }
     }
