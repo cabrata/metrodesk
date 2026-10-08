@@ -33,6 +33,20 @@ class SharedTest {
     }
 
     @Test
+    fun insertsInterludeGaps() {
+        val lines = listOf(
+            LyricLine(6000, "a", listOf(LyricWord("a", 6000, 7000))),
+            LyricLine(13000, ""),
+            LyricLine(20000, "b"),
+            LyricLine(21000, "c"),
+        )
+        assertEquals(
+            listOf(LyricItem(-1, 300, 5700), LyricItem(0, 6000), LyricItem(-1, 7300, 12700), LyricItem(-1, 13000, 19700), LyricItem(2, 20000), LyricItem(3, 21000)),
+            lyricItems(lines),
+        )
+    }
+
+    @Test
     fun validatesCookie() {
         assertNull(cookieError("a=1; SAPISID=x"))
         assertNotNull(cookieError("SAPISID=x\nEvil: y"))

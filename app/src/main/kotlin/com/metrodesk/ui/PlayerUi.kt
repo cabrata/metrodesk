@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import com.metrodesk.shared.LyricLine
 import com.metrodesk.shared.lyricWordGroups
+import com.metrodesk.shared.lyricItems
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -405,13 +406,13 @@ fun LyricsPanel(modifier: Modifier = Modifier) {
             }
         } else {
             val pos = smoothPosition(s.positionMs, s.isPlaying)
-            val current = ly.currentIndex(pos)
+            val items = remember(ly) { lyricItems(ly.lines) }
+            // Focus = latest started line or gap. Background vocals never take focus, they light up with their line.
+            val current = items.indexOfLast { (it.line < 0 || !ly.lines[it.line].background) && it.startMs <= pos + 300 }
             val list = rememberLazyListState()
             val hover = remember { MutableInteractionSource() }
             val hovered by hover.collectIsHoveredAsState()
-            val first = ly.lines.firstOrNull { !it.background }
-            // Item 0 holds the intro dots, so line i is item i + 1.
-            LaunchedEffect(song.id, current) { list.animateScrollToItem(current + 1) }
+            LaunchedEffect(song.id, current) { list.animateScrollToItem(current.coerceAtLeast(0)) }
             BoxWithConstraints(
                 Modifier.weight(1f).hoverable(hover)
                     // Soft fade at the top and bottom edges, like Apple Music.
@@ -422,17 +423,18 @@ fun LyricsPanel(modifier: Modifier = Modifier) {
                     },
             ) {
                 LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = maxHeight * 0.25f, bottom = maxHeight * 0.7f)) {
-                    item {
-                        Box(Modifier.animateContentSize()) {
-                            if (first != null && first.timeMs > 4000 && pos < first.timeMs - 300) InterludeDots(pos.toFloat() / (first.timeMs - 300), pos)
+                    itemsIndexed(items) { i, item ->
+                        if (item.line < 0) {
+                            // Gap: dots only while it is playing, collapsed otherwise so lines don't jump around.
+                            Box(Modifier.fillMaxWidth().animateContentSize().padding(horizontal = 16.dp)) {
+                                if (i == current && pos < item.endMs) InterludeDots((pos - item.startMs).toFloat() / (item.endMs - item.startMs), pos)
+                            }
+                            return@itemsIndexed
                         }
-                    }
-                    itemsIndexed(ly.lines) { i, line ->
-                        // Background vocals right after the current line light up with it.
-                        val active = i == current || (current >= 0 && i > current && line.background && line.timeMs <= pos + 300 && (current + 1 until i).all { ly.lines[it].background })
-                        val next = ly.lines.drop(i + 1).firstOrNull { !it.background }?.timeMs
+                        val line = ly.lines[item.line]
+                        val active = i == current || (current >= 0 && i > current && line.background && line.timeMs <= pos + 300 && (current + 1 until i).all { items[it].line >= 0 && ly.lines[items[it].line].background })
                         LyricRow(
-                            line, active, distance = if (current < 0) i + 1 else abs(i - current), pos = if (active) pos else 0L, next = if (active) next else null,
+                            line, active, distance = if (current < 0) i + 1 else abs(i - current), pos = if (active) pos else 0L,
                             style = if (line.background) style.copy(fontSize = fontSize * 0.7f, lineHeight = fontSize * 0.9f, fontStyle = FontStyle.Italic) else style,
                             sharp = hovered,
                             onClick = if (guest) null else ({ Player.seekTo(line.timeMs); if (!s.isPlaying) Player.play() }),
@@ -464,14 +466,13 @@ private fun smoothPosition(reported: Long, playing: Boolean): Long {
  * with distance (sharp while hovered so they are easy to read and click). Word-synced lines fill word by word.
  */
 @Composable
-private fun LyricRow(line: LyricLine, active: Boolean, distance: Int, pos: Long, next: Long?, style: TextStyle, sharp: Boolean, onClick: (() -> Unit)?) {
+private fun LyricRow(line: LyricLine, active: Boolean, distance: Int, pos: Long, style: TextStyle, sharp: Boolean, onClick: (() -> Unit)?) {
     val color = MaterialTheme.colorScheme.onSurface
     val d = distance.coerceAtMost(4)
     val motion = spring<Float>(dampingRatio = 0.8f, stiffness = 120f)
     val scale by animateFloatAsState(if (active) 1f else 0.94f, motion)
     val alpha by animateFloatAsState(if (active) 1f else if (sharp) 0.5f else 0.42f - d * 0.05f, motion)
     val blur by animateDpAsState(if (active || sharp) 0.dp else (d * 1.2f).dp, spring(stiffness = 120f))
-    val wordEnd = line.words.lastOrNull()?.endMs
     Column(
         Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(12.dp))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
@@ -481,8 +482,6 @@ private fun LyricRow(line: LyricLine, active: Boolean, distance: Int, pos: Long,
             .animateContentSize(),
     ) {
         when {
-            // Instrumental gap marked by an empty LRC line: breathing dots instead of a note.
-            line.text.isBlank() -> if (active && next != null) InterludeDots((pos - line.timeMs).toFloat() / (next - line.timeMs), pos) else Text("♪", style = style, color = color)
             active && line.words.isNotEmpty() -> {
                 val gap = with(LocalDensity.current) { (style.fontSize * 0.26f).toDp() }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(gap)) {
@@ -491,9 +490,6 @@ private fun LyricRow(line: LyricLine, active: Boolean, distance: Int, pos: Long,
             }
             else -> Text(line.text, style = style, color = color)
         }
-        // Long pause after a word-synced line: dots fill until the next line starts.
-        if (active && wordEnd != null && next != null && next - wordEnd >= 4500 && pos in wordEnd + 300..next - 300)
-            InterludeDots((pos - wordEnd - 300).toFloat() / (next - wordEnd - 600), pos)
     }
 }
 
@@ -533,13 +529,18 @@ private fun KaraokeWord(sylls: List<LyricWord>, pos: Long, style: TextStyle, col
     )
 }
 
-/** Three dots that fill one by one with [progress] and gently breathe. */
+/** Three dots that fill one by one with [progress] and gently breathe. Each dot scales around its own center so the row stays level. */
 @Composable
 private fun InterludeDots(progress: Float, pos: Long) {
     val color = MaterialTheme.colorScheme.onSurface
     val breathe = 1f + 0.12f * sin(pos / 1000.0 * 4).toFloat()
     val fade = (minOf(progress, 1 - progress) * 8).coerceIn(0f, 1f)
-    Row(Modifier.padding(vertical = 14.dp).graphicsLayer { scaleX = breathe * fade; scaleY = breathe * fade; transformOrigin = TransformOrigin(0f, 0.5f) }, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        repeat(3) { k -> Box(Modifier.size(14.dp).background(color.copy(alpha = 0.3f + 0.7f * (progress * 3 - k).coerceIn(0f, 1f)), CircleShape)) }
+    Row(Modifier.height(48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        repeat(3) { k ->
+            Box(
+                Modifier.size(14.dp).graphicsLayer { scaleX = breathe * fade; scaleY = breathe * fade }
+                    .background(color.copy(alpha = 0.3f + 0.7f * (progress * 3 - k).coerceIn(0f, 1f)), CircleShape),
+            )
+        }
     }
 }

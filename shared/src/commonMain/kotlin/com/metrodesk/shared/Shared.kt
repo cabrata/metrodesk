@@ -31,6 +31,30 @@ fun lyricWordGroups(text: String, words: List<LyricWord>): List<List<LyricWord>>
     return out
 }
 
+/** A row of the synced lyrics view: lyric line [line], or an interlude gap (`line == -1`) shown as dots until [endMs]. */
+data class LyricItem(val line: Int, val startMs: Long, val endMs: Long = 0)
+
+/**
+ * Lyric lines plus interlude gaps (intro, blank LRC lines, and pauses of 4.5 s+ after a word-synced line),
+ * so a gap takes focus like a line and the previous line dims instead of staying lit.
+ */
+fun lyricItems(lines: List<LyricLine>): List<LyricItem> {
+    val out = mutableListOf<LyricItem>()
+    val nextMain = { i: Int -> (i + 1 until lines.size).firstOrNull { !lines[it].background }?.let { lines[it].timeMs } }
+    nextMain(-1)?.let { if (it >= 4500) out += LyricItem(-1, 300, it - 300) }
+    lines.forEachIndexed { i, l ->
+        val next = if (l.background) null else nextMain(i)
+        if (l.text.isBlank()) {
+            if (next != null && next - l.timeMs >= 2000) out += LyricItem(-1, l.timeMs, next - 300)
+            return@forEachIndexed
+        }
+        out += LyricItem(i, l.timeMs)
+        val end = l.words.lastOrNull()?.endMs
+        if (end != null && next != null && next - end >= 4500) out += LyricItem(-1, end + 300, next - 300)
+    }
+    return out
+}
+
 private val timeTag = Regex("""\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?]""")
 private val wordTag = Regex("""<\d+:\d+[.:]\d+>""")
 private val voiceTag = Regex("""^\{(agent:\w+|bg)}""")
