@@ -1,4 +1,6 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import java.net.URI
+import java.security.MessageDigest
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
@@ -43,6 +45,38 @@ protobuf {
     }
 }
 
+// Windows installers ship libVLC inside the app so users never install VLC. Fetched only on Windows hosts.
+val vlcVersion = "3.0.21"
+val vlcSha256 = "a0b7ec02b50adf6417eed014fb8df50af39690505a4225b85b3dc2ed17d14843"
+val vlcBundleRoot = layout.buildDirectory.dir("vlc-bundle")
+val fetchVlc = tasks.register("fetchVlc") {
+    val zip = layout.buildDirectory.file("vlc-$vlcVersion-win64.zip")
+    val out = vlcBundleRoot.map { it.dir("windows") }
+    onlyIf { System.getProperty("os.name").lowercase().contains("win") || project.hasProperty("bundleVlc") }
+    outputs.dir(out)
+    doLast {
+        val z = zip.get().asFile
+        fun sha() = MessageDigest.getInstance("SHA-256").digest(z.readBytes()).joinToString("") { b -> "%02x".format(b) }
+        if (!z.exists() || sha() != vlcSha256) {
+            URI("https://download.videolan.org/pub/videolan/vlc/$vlcVersion/win64/vlc-$vlcVersion-win64.zip").toURL()
+                .openStream().use { s -> z.outputStream().use { o -> s.copyTo(o) } }
+            check(sha() == vlcSha256) { "VLC zip checksum mismatch" }
+        }
+        // Audio only: drop GUI/video/streaming plugins (~half the size).
+        val skip = listOf("gui", "lua", "video_output", "video_filter", "video_splitter", "visualization", "spu", "stream_out", "mux", "access_output", "control", "services_discovery", "text_renderer", "video_chroma", "d3d9", "d3d11")
+        project.sync {
+            from(zipTree(z)) {
+                include("*/libvlc.dll", "*/libvlccore.dll", "*/plugins/**")
+                skip.forEach { exclude("*/plugins/$it/**") }
+                eachFile { relativePath = RelativePath(true, *relativePath.segments.drop(1).toTypedArray()) }
+                includeEmptyDirs = false
+            }
+            into(out)
+        }
+    }
+}
+tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn(fetchVlc) }
+
 // Release version: appVersion in gradle.properties. MSI needs MAJOR.MINOR.BUILD numbers.
 val appVersion = (findProperty("appVersion") as String?)?.removePrefix("v") ?: "1.0.0"
 
@@ -63,6 +97,7 @@ compose.desktop {
             description = "Desktop YouTube Music client"
             vendor = "Utaloom"
             licenseFile.set(rootProject.file("LICENSE"))
+            appResourcesRootDir.set(vlcBundleRoot)
             modules("java.net.http", "java.sql", "jdk.unsupported", "java.naming", "jdk.security.auth")
             linux {
                 iconFile.set(project.file("icon.png"))
@@ -81,6 +116,18 @@ compose.desktop {
             }
         }
     }
+}
+
+// deb/rpm pull libVLC from the distro repos so users never install VLC by hand.
+tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>().configureEach {
+    val deps = when (targetFormat) {
+        TargetFormat.Deb -> "libvlc5,vlc-plugin-base"
+        // ponytail: Fedora package names; openSUSE/RHEL name VLC differently, add a separate rpm when someone asks.
+        TargetFormat.Rpm -> "vlc-libs,vlc-plugins-base,vlc-plugins-extra,vlc-plugin-ffmpeg,vlc-plugin-pulseaudio"
+        else -> null
+    }
+    // jpackage splits args on spaces, so the lists above must stay space-free.
+    if (deps != null) freeArgs.addAll("--linux-package-deps", deps)
 }
 
 tasks.register<JavaExec>("probe") {

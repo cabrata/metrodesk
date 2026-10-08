@@ -115,6 +115,11 @@ if (-not $hasBundledRuntime) {
 }
 Write-Host "Bundled runtime verified on disk."
 
+$bundledVlc = @(Get-ChildItem -Path $installDir -Filter "libvlc.dll" -Recurse -File -ErrorAction SilentlyContinue)
+if ($bundledVlc.Count -eq 0) { throw "Bundled libvlc.dll missing in $installDir" }
+if (-not (Test-Path (Join-Path $bundledVlc[0].DirectoryName "plugins\codec\libopus_plugin.dll"))) { throw "Bundled VLC plugins missing next to $($bundledVlc[0].FullName)" }
+Write-Host "Bundled VLC verified: $($bundledVlc[0].FullName)"
+
 # 5. Set isolated APPDATA under runner temp (leave LOCALAPPDATA and native deps intact)
 $tempRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [System.IO.Path]::GetTempPath() }
 $isolatedAppData = Join-Path $tempRoot "utaloom-test-appdata"

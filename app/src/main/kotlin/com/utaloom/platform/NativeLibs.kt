@@ -41,6 +41,8 @@ object NativeLibs {
     private fun candidates(): List<File> {
         val env = System.getenv()
         val dirs = buildList {
+            // Windows installers bundle libVLC as app resources.
+            System.getProperty("compose.application.resources.dir")?.let(::add)
             env["VLC_PATH"]?.let { add(it); add("$it/lib") }
             if (isWindows) {
                 listOf("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)").mapNotNullTo(this) { env[it]?.let { p -> "$p\\VideoLAN\\VLC" } }

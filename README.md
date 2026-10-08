@@ -34,14 +34,14 @@ Linux and Windows share one JVM UI, with portable parsing/validation in Kotlin M
 
 ### Requirements
 
-Playback uses **VLC**. Install it first:
+Playback uses **libVLC**, but you don't need to install it yourself:
 
-| OS | How |
-|----|-----|
-| Windows | Install [VLC 64-bit](https://www.videolan.org/vlc/download-windows.html) (default location is detected automatically) |
-| Debian/Ubuntu | `sudo apt install vlc` |
-| Fedora | `sudo dnf install vlc` |
-| Arch | `sudo pacman -S vlc` |
+| Package | VLC |
+|---------|-----|
+| Windows `.msi` | Bundled inside the installer |
+| `.deb` (Debian/Ubuntu) | Pulled in automatically by `sudo apt install ./utaloom_*.deb` |
+| `.rpm` (Fedora) | Pulled in automatically by `sudo dnf install ./utaloom-*.rpm` (needs [RPM Fusion](https://rpmfusion.org/Configuration) for some codecs) |
+| Other / run from source | Install VLC (`sudo pacman -S vlc`, etc.) |
 
 If VLC is installed somewhere unusual, set `VLC_PATH` to the folder that contains `libvlc`.
 
