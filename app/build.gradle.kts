@@ -48,8 +48,8 @@ val appVersion = (findProperty("appVersion") as String?)?.removePrefix("v") ?: "
 
 compose.desktop {
     application {
-        mainClass = "com.metrodesk.MainKt"
-        jvmArgs += listOf("-Xmx768m", "-Dmetrodesk.version=$appVersion")
+        mainClass = "com.utaloom.MainKt"
+        jvmArgs += listOf("-Xmx768m", "-Dutaloom.version=$appVersion")
         // packageRelease* tasks run ProGuard to drop unused code (mainly the huge icons pack).
         buildTypes.release.proguard {
             configurationFiles.from(project.file("proguard-rules.pro"))
@@ -58,10 +58,10 @@ compose.desktop {
         }
         nativeDistributions {
             targetFormats(TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.AppImage, TargetFormat.Msi, TargetFormat.Exe)
-            packageName = "metrodesk"
+            packageName = "utaloom"
             packageVersion = appVersion
             description = "Desktop YouTube Music client based on Metrolist"
-            vendor = "Metrodesk"
+            vendor = "Utaloom"
             licenseFile.set(rootProject.file("LICENSE"))
             modules("java.net.http", "java.sql", "jdk.unsupported", "java.naming", "jdk.security.auth")
             linux {
@@ -85,30 +85,30 @@ compose.desktop {
 
 tasks.register<JavaExec>("probe") {
     classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("com.metrodesk.ProbeKt")
+    mainClass.set("com.utaloom.ProbeKt")
     args = (project.findProperty("videoId") as String?)?.let { listOf(it) } ?: emptyList()
 }
 
 tasks.register<JavaExec>("ltProbe") {
     classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("com.metrodesk.LtProbeKt")
+    mainClass.set("com.utaloom.LtProbeKt")
 }
 
 tasks.register<JavaExec>("lyricsProbe") {
     classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("com.metrodesk.LyricsProbeKt")
+    mainClass.set("com.utaloom.LyricsProbeKt")
 }
 
 tasks.register<JavaExec>("playerSmoke") {
     classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("com.metrodesk.PlayerSmokeKt")
+    mainClass.set("com.utaloom.PlayerSmokeKt")
     environment("XDG_DATA_HOME", layout.buildDirectory.dir("smoke-data").get().asFile.absolutePath)
     environment("APPDATA", layout.buildDirectory.dir("smoke-data").get().asFile.absolutePath)
 }
 
 tasks.register<JavaExec>("networkSmoke") {
     classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("com.metrodesk.PlayerSmokeKt")
+    mainClass.set("com.utaloom.PlayerSmokeKt")
     args("network")
     environment("XDG_DATA_HOME", layout.buildDirectory.dir("network-smoke-data").get().asFile.absolutePath)
     environment("APPDATA", layout.buildDirectory.dir("network-smoke-data").get().asFile.absolutePath)
@@ -116,7 +116,7 @@ tasks.register<JavaExec>("networkSmoke") {
 
 tasks.register<JavaExec>("togetherAcceptance") {
     classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("com.metrodesk.TogetherAcceptanceKt")
+    mainClass.set("com.utaloom.TogetherAcceptanceKt")
     environment("XDG_DATA_HOME", layout.buildDirectory.dir("together-smoke-data").get().asFile.absolutePath)
     environment("APPDATA", layout.buildDirectory.dir("together-smoke-data").get().asFile.absolutePath)
 }

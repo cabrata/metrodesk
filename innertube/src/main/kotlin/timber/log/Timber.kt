@@ -3,7 +3,7 @@ package timber.log
 /** Minimal stand-in for Android's Timber so the shared innertube sources compile unchanged on desktop. */
 object Timber {
     @JvmStatic
-    var debug: Boolean = System.getenv("METRODESK_DEBUG") != null
+    var debug: Boolean = System.getenv("UTALOOM_DEBUG") != null
 
     fun v(message: String, vararg args: Any?) = log("D", message, args)
     fun d(message: String, vararg args: Any?) = log("D", message, args)

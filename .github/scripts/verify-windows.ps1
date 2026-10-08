@@ -48,7 +48,7 @@ foreach ($hive in $regHives) {
         $subkeys = @(Get-ChildItem -Path $hive -ErrorAction SilentlyContinue)
         foreach ($sub in $subkeys) {
             $displayName = $sub.GetValue("DisplayName")
-            if ($displayName -and $displayName -like "*metrodesk*") {
+            if ($displayName -and $displayName -like "*utaloom*") {
                 Write-Host "Found registry entry '$displayName' at $($sub.PSPath)"
                 $loc = $sub.GetValue("InstallLocation")
                 if ($loc -and (Test-Path $loc)) {
@@ -68,9 +68,9 @@ foreach ($hive in $regHives) {
 
 if (-not $installDir) {
     $fallbackPaths = @()
-    if ($env:LOCALAPPDATA) { $fallbackPaths += (Join-Path $env:LOCALAPPDATA "metrodesk") }
-    if ($env:ProgramFiles) { $fallbackPaths += (Join-Path $env:ProgramFiles "metrodesk") }
-    if (${env:ProgramFiles(x86)}) { $fallbackPaths += (Join-Path ${env:ProgramFiles(x86)} "metrodesk") }
+    if ($env:LOCALAPPDATA) { $fallbackPaths += (Join-Path $env:LOCALAPPDATA "utaloom") }
+    if ($env:ProgramFiles) { $fallbackPaths += (Join-Path $env:ProgramFiles "utaloom") }
+    if (${env:ProgramFiles(x86)}) { $fallbackPaths += (Join-Path ${env:ProgramFiles(x86)} "utaloom") }
     foreach ($cand in $fallbackPaths) {
         if ($cand -and (Test-Path $cand)) {
             Write-Host "Resolved installation from fallback path: $cand"
@@ -81,17 +81,17 @@ if (-not $installDir) {
 }
 
 if (-not $installDir -or -not (Test-Path $installDir)) {
-    throw "Could not determine metrodesk installation directory from registry or default paths."
+    throw "Could not determine utaloom installation directory from registry or default paths."
 }
 Write-Host "Target install directory: $installDir"
 
-$exePath = Join-Path $installDir "metrodesk.exe"
+$exePath = Join-Path $installDir "utaloom.exe"
 if (-not (Test-Path $exePath)) {
-    $foundExes = @(Get-ChildItem -Path $installDir -Filter "metrodesk.exe" -Recurse -File -Depth 2 -ErrorAction SilentlyContinue)
+    $foundExes = @(Get-ChildItem -Path $installDir -Filter "utaloom.exe" -Recurse -File -Depth 2 -ErrorAction SilentlyContinue)
     if ($foundExes -and $foundExes.Count -gt 0) {
         $exePath = $foundExes[0].FullName
     } else {
-        throw "metrodesk.exe not found under $installDir"
+        throw "utaloom.exe not found under $installDir"
     }
 }
 Write-Host "Target executable: $exePath"
@@ -105,9 +105,9 @@ if ($systemJava) {
 }
 
 $bundledRuntimeDir = Join-Path $installDir "runtime"
-$bundledCfg = Join-Path $installDir "app\metrodesk.cfg"
+$bundledCfg = Join-Path $installDir "app\utaloom.cfg"
 if (-not (Test-Path $bundledCfg)) {
-    $bundledCfg = Join-Path $installDir "metrodesk.cfg"
+    $bundledCfg = Join-Path $installDir "utaloom.cfg"
 }
 $hasBundledRuntime = (Test-Path $bundledRuntimeDir) -or (Test-Path $bundledCfg)
 if (-not $hasBundledRuntime) {
@@ -117,7 +117,7 @@ Write-Host "Bundled runtime verified on disk."
 
 # 5. Set isolated APPDATA under runner temp (leave LOCALAPPDATA and native deps intact)
 $tempRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [System.IO.Path]::GetTempPath() }
-$isolatedAppData = Join-Path $tempRoot "metrodesk-test-appdata"
+$isolatedAppData = Join-Path $tempRoot "utaloom-test-appdata"
 if (Test-Path $isolatedAppData) {
     Remove-Item -Recurse -Force $isolatedAppData -ErrorAction SilentlyContinue
 }
@@ -208,10 +208,10 @@ Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
 
 # 7. Start actual installed .exe (not portable app)
-$stdoutLog = Join-Path $artifactDir "metrodesk-stdout.log"
-$stderrLog = Join-Path $artifactDir "metrodesk-stderr.log"
+$stdoutLog = Join-Path $artifactDir "utaloom-stdout.log"
+$stderrLog = Join-Path $artifactDir "utaloom-stderr.log"
 
-Write-Host "Launching installed metrodesk application..."
+Write-Host "Launching installed utaloom application..."
 $proc = Start-Process -FilePath $exePath -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog -PassThru
 
 # 8. Wait for real MainWindowHandle with timeout and process exit check
@@ -222,7 +222,7 @@ $hwnd = [IntPtr]::Zero
 while ($stopwatch.Elapsed.TotalSeconds -lt $launchTimeoutSeconds) {
     if ($proc.HasExited) {
         $errOut = if (Test-Path $stderrLog) { Get-Content -Path $stderrLog -Raw } else { "" }
-        throw "metrodesk.exe exited prematurely with code $($proc.ExitCode). Stderr: $errOut"
+        throw "utaloom.exe exited prematurely with code $($proc.ExitCode). Stderr: $errOut"
     }
 
     $proc.Refresh()
@@ -231,7 +231,7 @@ while ($stopwatch.Elapsed.TotalSeconds -lt $launchTimeoutSeconds) {
         break
     }
 
-    $cand = [MetroWin32]::FindWindowForProcess($proc.Id, "Metrodesk")
+    $cand = [MetroWin32]::FindWindowForProcess($proc.Id, "Utaloom")
     if ($cand -ne [IntPtr]::Zero) {
         $hwnd = $cand
         break
@@ -263,7 +263,7 @@ try {
     if ($jvmMod) {
         Write-Host "Loaded jvm.dll: $($jvmMod.FileName)"
         if (-not $jvmMod.FileName.StartsWith($installDir, [System.StringComparison]::OrdinalIgnoreCase)) {
-            throw "metrodesk.exe loaded jvm.dll from '$($jvmMod.FileName)', expected bundled runtime in '$installDir'"
+            throw "utaloom.exe loaded jvm.dll from '$($jvmMod.FileName)', expected bundled runtime in '$installDir'"
         }
         Write-Host "Verified: jvm.dll loaded from bundled runtime; system Java on PATH was ignored."
     } else {
@@ -273,7 +273,7 @@ try {
     Write-Warning "Process module enumeration skipped: $_"
 }
 
-# 10. Assert window title is Metrodesk and dimensions are >= 900x600
+# 10. Assert window title is Utaloom and dimensions are >= 900x600
 if ($hwnd -ne [IntPtr]::Zero) {
     $title = [MetroWin32]::GetText($hwnd)
     if ([string]::IsNullOrWhiteSpace($title)) {
@@ -281,8 +281,8 @@ if ($hwnd -ne [IntPtr]::Zero) {
         $title = $proc.MainWindowTitle
     }
     Write-Host "Detected window title: '$title'"
-    if ($title -ne "Metrodesk" -and $title -notmatch "Metrodesk") {
-        throw "Expected window title to match 'Metrodesk', got '$title'"
+    if ($title -ne "Utaloom" -and $title -notmatch "Utaloom") {
+        throw "Expected window title to match 'Utaloom', got '$title'"
     }
 
     $rect = New-Object MetroWin32+RECT
@@ -293,7 +293,7 @@ if ($hwnd -ne [IntPtr]::Zero) {
     }
 
     # 11. Capture screenshot and verify distinct nonblank rendered pixels
-    $screenshotPath = Join-Path $artifactDir "metrodesk-window.png"
+    $screenshotPath = Join-Path $artifactDir "utaloom-window.png"
     try {
         $screenWidth = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width
         $screenHeight = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Height
@@ -330,13 +330,13 @@ while (-not $proc.HasExited -and $closeWatch.Elapsed.TotalSeconds -lt $closeTime
 }
 
 if (-not $proc.HasExited) {
-    Write-Warning "Force-stopping metrodesk after $closeTimeout seconds."
+    Write-Warning "Force-stopping utaloom after $closeTimeout seconds."
     Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
 }
 Write-Host "Process terminated successfully."
 
 # 13. Verify settings file created in isolated APPDATA and assert default theme
-$settingsFile = Join-Path $isolatedAppData "metrodesk\settings.json"
+$settingsFile = Join-Path $isolatedAppData "utaloom\settings.json"
 Write-Host "Verifying settings persistence at: $settingsFile"
 if (Test-Path $settingsFile) {
     $settingsRaw = Get-Content -Path $settingsFile -Raw
@@ -345,7 +345,7 @@ if (Test-Path $settingsFile) {
     $theme = $settingsJson.darkMode
     Write-Host "Read default theme setting: '$theme'"
 } else {
-    Write-Host "Isolated data directory created: $(Test-Path (Join-Path $isolatedAppData 'metrodesk'))"
+    Write-Host "Isolated data directory created: $(Test-Path (Join-Path $isolatedAppData 'utaloom'))"
 }
 
 Write-Host "Windows MSI acceptance verification succeeded!"

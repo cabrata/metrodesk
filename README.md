@@ -1,9 +1,9 @@
-# Metrodesk
+# Utaloom
 
 Desktop YouTube Music client for **Linux and Windows**, based on [Metrolist](https://github.com/MetrolistGroup/Metrolist).
 Built with Kotlin, Compose Multiplatform (Material 3) and libVLC.
 
-Metrodesk reuses Metrolist's `innertube` parsing module and InnerTubeX extraction. It is a separate desktop port, not a complete Android feature-for-feature replacement. Linux and Windows share one JVM UI, with portable parsing/validation in Kotlin Multiplatform `shared/commonMain`.
+Utaloom reuses Metrolist's `innertube` parsing module and InnerTubeX extraction. It is a separate desktop port, not a complete Android feature-for-feature replacement. Linux and Windows share one JVM UI, with portable parsing/validation in Kotlin Multiplatform `shared/commonMain`.
 
 ## Screenshots
 
@@ -49,9 +49,9 @@ If VLC is installed somewhere unusual, set `VLC_PATH` to the folder that contain
 
 Grab the latest build from [Releases](../../releases) or the [Actions](../../actions) artifacts:
 
-- **Windows**: `metrodesk-x.y.z.msi`
-- **Debian/Ubuntu**: `metrodesk_x.y.z_amd64.deb` (`sudo apt install ./metrodesk_*.deb`)
-- **Other Linux**: the portable app folder, run `bin/metrodesk`
+- **Windows**: `utaloom-x.y.z.msi`
+- **Debian/Ubuntu**: `utaloom_x.y.z_amd64.deb` (`sudo apt install ./utaloom_*.deb`)
+- **Other Linux**: the portable app folder, run `bin/utaloom`
 
 Packages bundle their own Java runtime.
 
@@ -76,7 +76,7 @@ Hosting your own: see [metroserver](https://github.com/MetrolistGroup/metroserve
 
 ## Signing in
 
-Metrodesk has no embedded browser, so sign-in uses your YouTube Music cookie:
+Utaloom has no embedded browser, so sign-in uses your YouTube Music cookie:
 
 1. Open https://music.youtube.com in your browser and sign in.
 2. Open DevTools (F12) → Network, reload, click any request to `music.youtube.com`.
@@ -89,8 +89,8 @@ The cookie is stored only on your computer and is **not encrypted**. On Linux th
 
 | OS | Folder |
 |----|--------|
-| Windows | `%APPDATA%\metrodesk` |
-| Linux | `~/.local/share/metrodesk` |
+| Windows | `%APPDATA%\utaloom` |
+| Linux | `~/.local/share/utaloom` |
 
 ## Build from source
 

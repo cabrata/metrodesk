@@ -43,7 +43,7 @@ object Paxsenix {
 
                 defaultRequest {
                     url("https://lyrics.paxsenix.org")
-                    header("User-Agent", "Metrodesk")
+                    header("User-Agent", "Utaloom")
                 }
 
                 expectSuccess = true

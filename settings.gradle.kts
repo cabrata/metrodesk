@@ -1,4 +1,4 @@
-rootProject.name = "metrodesk"
+rootProject.name = "utaloom"
 
 pluginManagement {
     repositories {

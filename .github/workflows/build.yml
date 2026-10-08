@@ -58,7 +58,7 @@ jobs:
         run: powershell -ExecutionPolicy Bypass -File .github/scripts/verify-windows.ps1
       - uses: actions/upload-artifact@v4
         with:
-          name: metrodesk-${{ runner.os }}
+          name: utaloom-${{ runner.os }}
           path: |
             app/build/compose/binaries/main/deb/*.deb
             app/build/compose/binaries/main/msi/*.msi
