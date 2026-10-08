@@ -121,6 +121,7 @@ fun SettingsScreen() {
                 if (s.cookie != null) TextButton({ confirm = "signout" }) { Text("Sign out") }
             }
         }
+        item { UpdateRow() }
         item { HorizontalDivider(Modifier.padding(horizontal = 24.dp)); SectionTitle("Appearance") }
         item { SettingsChoice("Theme", "Follow your system or choose a fixed appearance.", s.darkMode, listOf("system" to "System", "dark" to "Dark", "light" to "Light")) { v -> Stores.settings.update { it.copy(darkMode = v) } } }
         item { SettingsToggle("Dynamic color", "Use the current track artwork for the app accent color.", s.dynamicColor) { v -> Stores.settings.update { it.copy(dynamicColor = v) } } }
@@ -253,6 +254,38 @@ private fun CookieLoginDialog(onDismiss: () -> Unit) {
         }
     }, enabled = !busy && validation == null) { Text(if (busy) "Signing in…" else "Sign in") } },
         dismissButton = { TextButton({ cookie = ""; onDismiss() }, enabled = !busy) { Text("Cancel") } })
+}
+
+/** Current version plus a manual "check for updates" against GitHub releases. */
+@Composable
+private fun UpdateRow() {
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf<String?>(null) }
+    var release by remember { mutableStateOf<com.metrodesk.platform.Updates.Release?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    HorizontalDivider(Modifier.padding(horizontal = 24.dp))
+    SectionTitle("About")
+    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Metrodesk ${com.metrodesk.platform.Updates.current}", style = MaterialTheme.typography.titleMedium)
+            Text(status ?: "Updates come from GitHub releases.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        release?.let { r -> Button({ com.metrodesk.platform.Updates.open(r.html_url) }) { Text("Download ${r.tag_name}") } }
+        OutlinedButton({
+            busy = true
+            scope.launch {
+                val res = withContext(Dispatchers.IO) { runCatching { com.metrodesk.platform.Updates.check() } }
+                release = res.getOrNull()
+                status = when {
+                    res.isFailure -> "Couldn't check for updates: ${res.exceptionOrNull()?.message}"
+                    release != null -> "${release!!.tag_name} is available."
+                    com.metrodesk.platform.Updates.current == "dev" -> "Development build, update check is off."
+                    else -> "You're on the latest version."
+                }
+                busy = false
+            }
+        }, enabled = !busy) { Text(if (busy) "Checking…" else "Check for updates") }
+    }
 }
 
 internal fun settingsScreenSelfCheck() {

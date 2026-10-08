@@ -47,6 +47,13 @@ class SharedTest {
     }
 
     @Test
+    fun comparesVersions() {
+        assertEquals(true, isNewerVersion("v1.2.10", "1.2.9"))
+        assertEquals(false, isNewerVersion("v1.2.0", "1.2"))
+        assertEquals(false, isNewerVersion("v1.0.0", "1.1.0"))
+    }
+
+    @Test
     fun validatesCookie() {
         assertNull(cookieError("a=1; SAPISID=x"))
         assertNotNull(cookieError("SAPISID=x\nEvil: y"))

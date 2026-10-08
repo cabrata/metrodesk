@@ -43,14 +43,17 @@ protobuf {
     }
 }
 
+// Release version from CI (-PappVersion=1.2.3, taken from the v1.2.3 tag). MSI needs MAJOR.MINOR.BUILD numbers.
+val appVersion = (findProperty("appVersion") as String?)?.removePrefix("v") ?: "1.0.0"
+
 compose.desktop {
     application {
         mainClass = "com.metrodesk.MainKt"
-        jvmArgs += listOf("-Xmx768m")
+        jvmArgs += listOf("-Xmx768m", "-Dmetrodesk.version=$appVersion")
         nativeDistributions {
             targetFormats(TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.AppImage, TargetFormat.Msi, TargetFormat.Exe)
             packageName = "metrodesk"
-            packageVersion = "1.0.0"
+            packageVersion = appVersion
             description = "Desktop YouTube Music client based on Metrolist"
             vendor = "Metrodesk"
             licenseFile.set(rootProject.file("LICENSE"))
@@ -59,7 +62,7 @@ compose.desktop {
                 iconFile.set(project.file("icon.png"))
                 debMaintainer = "metrodesk@caliph.dev"
                 appCategory = "Audio"
-                debPackageVersion = "1.0.0"
+                debPackageVersion = appVersion
             }
             windows {
                 iconFile.set(project.file("icon.ico"))

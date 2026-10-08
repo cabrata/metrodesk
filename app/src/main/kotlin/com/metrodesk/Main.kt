@@ -154,6 +154,11 @@ private fun App(vlcError: String?) {
     LaunchedEffect(Unit) {
         if (vlcError != null) snackbar.showSnackbar(vlcError, duration = SnackbarDuration.Indefinite)
     }
+    LaunchedEffect(Unit) {
+        val update = withContext(Dispatchers.IO) { runCatching { com.metrodesk.platform.Updates.check() }.getOrNull() } ?: return@LaunchedEffect
+        val r = snackbar.showSnackbar("Metrodesk ${update.tag_name} is available (you have ${com.metrodesk.platform.Updates.current})", actionLabel = "Download", withDismissAction = true, duration = SnackbarDuration.Indefinite)
+        if (r == SnackbarResult.ActionPerformed) com.metrodesk.platform.Updates.open(update.html_url)
+    }
 
     MetrodeskTheme(seed, dark) {
         Surface(color = MaterialTheme.colorScheme.background) {

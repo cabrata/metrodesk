@@ -55,6 +55,18 @@ fun lyricItems(lines: List<LyricLine>): List<LyricItem> {
     return out
 }
 
+/** True when release tag [latest] ("v1.2.10") is newer than [current] ("1.2.9"). Non-numeric parts count as 0. */
+fun isNewerVersion(latest: String, current: String): Boolean {
+    val parse = { v: String -> v.trim().removePrefix("v").substringBefore('-').split('.').map { it.toIntOrNull() ?: 0 } }
+    val a = parse(latest)
+    val b = parse(current)
+    for (i in 0 until maxOf(a.size, b.size)) {
+        val d = a.getOrElse(i) { 0 } - b.getOrElse(i) { 0 }
+        if (d != 0) return d > 0
+    }
+    return false
+}
+
 private val timeTag = Regex("""\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?]""")
 private val wordTag = Regex("""<\d+:\d+[.:]\d+>""")
 private val voiceTag = Regex("""^\{(agent:\w+|bg)}""")
