@@ -22,9 +22,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import uk.co.caprica.vlcj.factory.MediaPlayerFactory
-import uk.co.caprica.vlcj.player.base.MediaPlayer
-import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.pow
@@ -71,15 +68,14 @@ object Player {
     /** When true, playback controls are driven remotely (Listen Together guest). */
     @Volatile var remoteControlled: Boolean = false
 
-    private var factory: MediaPlayerFactory? = null
-    @Volatile private var mp: MediaPlayer? = null
+    @Volatile private var mp: AudioEngine? = null
     private var loadJob: Job? = null
     private var retryJob: Job? = null
     private var radioJob: Job? = null
     private var persistJob: Job? = null
     private val generation = AtomicLong()
     @Volatile private var loadedGeneration = -1L
-    private var events: MediaPlayerEventAdapter? = null
+    private var events: AudioEngine.Listener? = null
     private var sleepJob: Job? = null
     private var originalOrder: List<Song>? = null
     @Volatile private var gain = 1.0
@@ -95,33 +91,30 @@ object Player {
     @Synchronized fun init(): Boolean {
         if (mp != null) return true
         return runCatching {
-            val options = listOf("--no-video", "--network-caching=1500") + if (System.getenv("UTALOOM_DEBUG") == null) listOf("--quiet") else listOf("--verbose=1")
-            factory = MediaPlayerFactory(*options.toTypedArray())
-            mp = factory!!.mediaPlayers().newMediaPlayer()
+            mp = createAudioEngine()
             val s = Stores.settings.value
             _state.update { it.copy(volume = s.volume) }
             restoreQueue()
             persistJob = scope.launch { positionPersistLoop() }
             true
         }.getOrElse {
-            System.err.println("libVLC unavailable: ${it.message}")
-            _state.update { s -> s.copy(error = "VLC not found. Install VLC media player to enable playback.") }
+            System.err.println("Audio backend unavailable: ${it.message}")
+            _state.update { s -> s.copy(error = "Audio playback is unavailable.") }
             false
         }
     }
 
     fun release() {
-        val old: MediaPlayer?
-        val oldFactory: MediaPlayerFactory?
+        val old: AudioEngine?
         synchronized(this) {
             persist()
             cancelLoading()
             sleepJob?.cancel(); persistJob?.cancel()
-            old = mp; oldFactory = factory
-            mp = null; factory = null; events = null
+            old = mp
+            mp = null; events = null
         }
-        // release may wait for VLC event dispatch, so never hold Player's monitor here.
-        old?.release(); oldFactory?.release()
+        // release may wait for backend event dispatch, so never hold Player's monitor here.
+        old?.release()
     }
 
     private fun cancelLoading() {
@@ -166,7 +159,7 @@ object Player {
                 }
             }.onFailure { e ->
                 if (e is CancellationException) throw e
-                if (gen == generation.get()) _state.update { it.copy(error = e.message) }
+                if (gen == generation.get()) _state.update { it.copy(error = e.message?.takeIf { message -> message.isNotBlank() } ?: "Couldn't load radio.") }
             }
         }
     }
@@ -285,7 +278,7 @@ object Player {
             return load(play = true, notify = false, startAt = _state.value.positionMs)
         }
         val gen = generation.get()
-        p.submit { if (gen == generation.get() && p === mp) p.controls().play() }
+        p.submit { if (gen == generation.get() && p === mp) p.play() }
     }
 
     @Synchronized fun pause(fromRemote: Boolean = false) {
@@ -293,7 +286,7 @@ object Player {
         val p = mp ?: return
         playWhenReady = false
         val gen = generation.get()
-        p.submit { if (gen == generation.get() && p === mp) p.controls().setPause(true) }
+        p.submit { if (gen == generation.get() && p === mp) p.setPause(true) }
         _state.update { it.copy(isPlaying = false) }
         if (!fromRemote) hooks?.onPause(_state.value.positionMs)
     }
@@ -303,10 +296,10 @@ object Player {
         val p = mp ?: return
         val target = ms.coerceAtLeast(0)
         _state.update { it.copy(positionMs = target) }
-        if (loadedId != _state.value.current?.id || !p.status().isSeekable) pendingSeek = target
+        if (loadedId != _state.value.current?.id || !p.isSeekable) pendingSeek = target
         else {
             val gen = generation.get()
-            p.submit { if (gen == generation.get() && p === mp) p.controls().setTime(target) }
+            p.submit { if (gen == generation.get() && p === mp) p.seek(target) }
         }
         if (!fromRemote) hooks?.onSeek(target)
     }
@@ -350,7 +343,7 @@ object Player {
         playWhenReady = false
         radioEndpoint = null; radioContinuation = null
         val gen = generation.get()
-        mp?.let { p -> p.submit { if (gen == generation.get() && p === mp) p.controls().stop() } }
+        mp?.let { p -> p.submit { if (gen == generation.get() && p === mp) p.stop() } }
         loadedId = null
         _state.update { PlayerState(volume = it.volume) }
         persist()
@@ -373,7 +366,7 @@ object Player {
         val p = mp ?: return
         val s = _state.value
         val v = if (s.muted) 0 else (s.volume * gain).toInt().coerceIn(0, 150)
-        p.submit { p.audio().setVolume(v) }
+        p.submit { p.setVolume(v) }
     }
 
     fun setSleepTimer(minutes: Int?) {
@@ -416,14 +409,14 @@ object Player {
         loadJob = scope.launch { startMedia(p, song, gen) }
     }
 
-    private fun currentLoad(p: MediaPlayer, songId: String, gen: Long): Boolean =
+    private fun currentLoad(p: AudioEngine, songId: String, gen: Long): Boolean =
         p === mp && gen == generation.get() && _state.value.current?.id == songId
 
-    private suspend fun startMedia(p: MediaPlayer, song: Song, gen: Long) {
+    private suspend fun startMedia(p: AudioEngine, song: Song, gen: Long) {
         val local = Stores.library.value.downloaded[song.id]?.let(::File)?.takeIf { it.exists() }
-        val (mrl, options) = if (local != null) {
+        val (mrl, headers) = if (local != null) {
             gain = 1.0
-            local.absolutePath to arrayOf()
+            local.absolutePath to emptyMap()
         } else {
             val quality = runCatching { AudioQuality.valueOf(Stores.settings.value.audioQuality) }.getOrDefault(AudioQuality.AUTO)
             val stream = runCatching { StreamResolver.resolve(song.id, quality, allowBoundedRange = false) }.getOrElse { e ->
@@ -439,26 +432,21 @@ object Player {
             if (!currentLoad(p, song.id, gen)) return
             gain = if (Stores.settings.value.normalizeVolume) stream.loudnessDb?.let { 10.0.pow(-it / 20.0).coerceAtMost(1.0) } ?: 1.0 else 1.0
             lastClient = stream.clientName
-            val ua = stream.headers["User-Agent"]
-            stream.audioUrl to listOfNotNull(
-                ua?.let { ":http-user-agent=$it" },
-                stream.headers["Referer"]?.let { ":http-referrer=$it" },
-                ":http-reconnect",
-            ).toTypedArray()
+            stream.audioUrl to stream.headers
         }
         currentCoroutineContext().ensureActive()
         if (!currentLoad(p, song.id, gen)) return
         p.submit {
             synchronized(Player) {
                 if (!currentLoad(p, song.id, gen)) return@submit
-                events?.let { p.events().removeMediaPlayerEventListener(it) }
-                val listener = Events(song.id, gen)
+                events?.let { p.removeListener(it) }
+                val listener = Events(p, song.id, gen)
                 events = listener
-                p.events().addMediaPlayerEventListener(listener)
+                p.addListener(listener)
                 loadedId = song.id
                 loadedGeneration = gen
                 // start-paused avoids a burst of audio while a guest waits for the host's play message.
-                val accepted = if (playWhenReady) p.media().play(mrl, *options) else p.media().play(mrl, "start-paused", *options)
+                val accepted = p.load(mrl, headers, startPaused = !playWhenReady)
                 if (!accepted && currentLoad(p, song.id, gen)) onError(gen)
                 if (currentLoad(p, song.id, gen)) applyVolume()
             }
@@ -489,62 +477,62 @@ object Player {
         }
     }
 
-    private class Events(private val songId: String, private val gen: Long) : MediaPlayerEventAdapter() {
-        private fun active(p: MediaPlayer) = currentLoad(p, songId, gen) && loadedGeneration == gen && loadedId == songId
+    private class Events(private val p: AudioEngine, private val songId: String, private val gen: Long) : AudioEngine.Listener {
+        private fun active() = currentLoad(p, songId, gen) && loadedGeneration == gen && loadedId == songId
 
         /** A paused/prebuffered guest must signal ready even though it has never played. */
-        private fun ready(p: MediaPlayer) {
-            if (!active(p)) return
+        private fun ready() {
+            if (!active()) return
             val seek: Long?
             synchronized(Player) {
-                if (!active(p) || readyFor == songId) return
+                if (!active() || readyFor == songId) return
                 readyFor = songId
                 seek = pendingSeek
                 pendingSeek = null
             }
-            _state.update { if (active(p)) it.copy(isBuffering = false) else it }
-            if (seek != null) p.submit { if (active(p)) p.controls().setTime(seek) }
+            _state.update { if (active()) it.copy(isBuffering = false) else it }
+            if (seek != null) p.submit { if (active()) p.seek(seek) }
             hooks?.onBufferReady(songId)
         }
 
-        override fun playing(mediaPlayer: MediaPlayer) {
-            if (!active(mediaPlayer)) return
+        override fun playing() {
+            if (!active()) return
             val seek = pendingSeek
             _state.update { it.copy(isPlaying = playWhenReady, isBuffering = false) }
-            ready(mediaPlayer)
+            ready()
             applyVolume()
             if (playWhenReady) {
-                if (!remoteControlled) hooks?.onPlaying(seek ?: mediaPlayer.status().time())
+                if (!remoteControlled) hooks?.onPlaying(seek ?: p.time)
             } else {
-                mediaPlayer.submit { if (active(mediaPlayer) && !playWhenReady) mediaPlayer.controls().setPause(true) }
+                p.submit { if (active() && !playWhenReady) p.setPause(true) }
             }
         }
 
-        override fun paused(mediaPlayer: MediaPlayer) {
-            if (!active(mediaPlayer)) return
+        override fun paused() {
+            if (!active()) return
             _state.update { it.copy(isPlaying = false) }
-            ready(mediaPlayer)
+            ready()
         }
-        override fun stopped(mediaPlayer: MediaPlayer) {
-            if (active(mediaPlayer)) _state.update { it.copy(isPlaying = false) }
+        override fun stopped() {
+            if (active()) _state.update { it.copy(isPlaying = false) }
         }
-        override fun buffering(mediaPlayer: MediaPlayer, newCache: Float) {
-            if (!active(mediaPlayer)) return
-            _state.update { it.copy(isBuffering = newCache < 100f) }
-            if (newCache >= 100f) ready(mediaPlayer)
+        override fun buffering(percent: Float) {
+            if (!active()) return
+            _state.update { it.copy(isBuffering = percent < 100f) }
+            if (percent >= 100f) ready()
         }
-        override fun timeChanged(mediaPlayer: MediaPlayer, newTime: Long) {
-            if (active(mediaPlayer)) _state.update { it.copy(positionMs = newTime) }
+        override fun timeChanged(timeMs: Long) {
+            if (active()) _state.update { it.copy(positionMs = timeMs) }
         }
-        override fun lengthChanged(mediaPlayer: MediaPlayer, newLength: Long) {
-            if (active(mediaPlayer) && newLength > 0) _state.update { it.copy(durationMs = newLength) }
+        override fun lengthChanged(lengthMs: Long) {
+            if (active() && lengthMs > 0) _state.update { it.copy(durationMs = lengthMs) }
         }
-        override fun finished(mediaPlayer: MediaPlayer) {
-            if (!active(mediaPlayer)) return
+        override fun finished() {
+            if (!active()) return
             _state.update { it.copy(isPlaying = false) }
-            scope.launch { if (active(mediaPlayer)) next(auto = true) }
+            scope.launch { if (active()) next(auto = true) }
         }
-        override fun error(mediaPlayer: MediaPlayer) { if (active(mediaPlayer)) onError(gen) }
+        override fun error() { if (active()) onError(gen) }
     }
 
     // endregion
