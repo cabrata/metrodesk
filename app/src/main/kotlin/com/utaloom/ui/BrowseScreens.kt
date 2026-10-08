@@ -36,9 +36,9 @@ import com.utaloom.data.Stores
 import com.utaloom.data.toSong
 import com.utaloom.playback.Downloads
 import com.utaloom.playback.Player
-import com.metrolist.innertube.YouTube
-import com.metrolist.innertube.models.*
-import com.metrolist.innertube.pages.*
+import com.utaloom.innertube.YouTube
+import com.utaloom.innertube.models.*
+import com.utaloom.innertube.pages.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch

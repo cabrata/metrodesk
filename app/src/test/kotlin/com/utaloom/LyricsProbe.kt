@@ -6,7 +6,7 @@ import kotlinx.coroutines.runBlocking
 
 /** Live check: asks each lyrics provider alone for a well-known song. Run: ./gradlew :app:lyricsProbe */
 fun main() = runBlocking {
-    com.metrolist.innertube.YouTube.run { visitorData = visitorData().getOrNull() }
+    com.utaloom.innertube.YouTube.run { visitorData = visitorData().getOrNull() }
     val song = Song(System.getenv("VID") ?: "dQw4w9WgXcQ", "Never Gonna Give You Up", listOf("Rick Astley"), album = "Whenever You Need Somebody", duration = 213)
     for (p in LyricsRepository.providers) {
         LyricsRepository.invalidate(song.id)

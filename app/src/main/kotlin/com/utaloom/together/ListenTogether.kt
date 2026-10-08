@@ -67,7 +67,7 @@ data class TogetherState(
     val logs: List<String> = emptyList(),
 )
 
-/** Listen Together client compatible with Metrolist's metroserver protocol (protobuf envelopes over WebSocket). */
+/** Listen Together client for the Listen Together server protocol (protobuf envelopes over WebSocket). */
 object ListenTogether : PlayerHooks {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _state = MutableStateFlow(TogetherState())
@@ -172,7 +172,7 @@ object ListenTogether : PlayerHooks {
         val gen = socketGeneration.incrementAndGet()
         _state.update { it.copy(connection = if (attempts > 0) Connection.RECONNECTING else Connection.CONNECTING) }
         log("Connecting to $url")
-        // Contains "okhttp" so stock metroserver user-agent policies let desktop clients host rooms.
+        // Contains "okhttp" so the server's user-agent policy lets desktop clients host rooms.
         runCatching {
             val req = Request.Builder().url(url).header("User-Agent", "Utaloom/1.0 okhttp").build()
             ws = http.newWebSocket(req, Listener(gen))

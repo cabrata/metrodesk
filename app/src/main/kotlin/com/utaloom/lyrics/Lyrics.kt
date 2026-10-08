@@ -4,13 +4,13 @@ import com.utaloom.data.Song
 import com.utaloom.shared.Lyrics
 import com.utaloom.shared.parseLrc
 import com.utaloom.shared.plainLyrics
-import com.metrolist.kugou.KuGou
-import com.metrolist.music.betterlyrics.BetterLyrics
-import com.metrolist.music.lyrics.LyricsPlusProvider
-import com.metrolist.music.lyrics.ZemerLyricsProvider
-import com.metrolist.paxsenix.Paxsenix
-import com.metrolist.innertube.YouTube
-import com.metrolist.innertube.models.WatchEndpoint
+import com.utaloom.kugou.KuGou
+import com.utaloom.music.betterlyrics.BetterLyrics
+import com.utaloom.music.lyrics.LyricsPlusProvider
+import com.utaloom.music.lyrics.ZemerLyricsProvider
+import com.utaloom.paxsenix.Paxsenix
+import com.utaloom.innertube.YouTube
+import com.utaloom.innertube.models.WatchEndpoint
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
 object LyricsRepository {
-    /** Same order as Metrolist's default. */
+    /** Default provider order. */
     val providers = listOf("BetterLyrics", "LrcLib", "KuGou", "Paxsenix", "LyricsPlus", "Zemer", "YouTubeSubtitle", "YouTube")
 
     private val cache = ConcurrentHashMap<String, Lyrics?>()

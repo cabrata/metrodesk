@@ -1,7 +1,7 @@
 package com.utaloom.playback
 
 import com.utaloom.data.Paths
-import com.metrolist.innertube.YouTube
+import com.utaloom.innertube.YouTube
 import com.metrolist.innertubex.InnerTubeLogLevel
 import com.metrolist.innertubex.InnerTubeLogger
 import com.metrolist.innertubex.cipher.PlayerConfigRepository
@@ -19,7 +19,7 @@ import kotlinx.coroutines.sync.withLock
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 
-/** Desktop port of Metrolist's InnerTubeXPlayer: resolves a playable direct audio URL for a video id. */
+/** Resolves a playable direct audio URL for a video id. */
 object StreamResolver {
     private const val FAILURE_TTL_MS = 5 * 60 * 1000L
 

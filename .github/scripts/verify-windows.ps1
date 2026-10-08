@@ -135,13 +135,13 @@ if (-not $env:JAVA_TOOL_OPTIONS) {
 Write-Host "JAVA_TOOL_OPTIONS: $env:JAVA_TOOL_OPTIONS"
 
 # Define Win32 helpers for window queries and close message
-if (-not ([System.Management.Automation.PSTypeName]'MetroWin32').Type) {
+if (-not ([System.Management.Automation.PSTypeName]'UtaloomWin32').Type) {
     Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
 
-public class MetroWin32 {
+public class UtaloomWin32 {
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT {
         public int Left;
@@ -231,7 +231,7 @@ while ($stopwatch.Elapsed.TotalSeconds -lt $launchTimeoutSeconds) {
         break
     }
 
-    $cand = [MetroWin32]::FindWindowForProcess($proc.Id, "Utaloom")
+    $cand = [UtaloomWin32]::FindWindowForProcess($proc.Id, "Utaloom")
     if ($cand -ne [IntPtr]::Zero) {
         $hwnd = $cand
         break
@@ -275,7 +275,7 @@ try {
 
 # 10. Assert window title is Utaloom and dimensions are >= 900x600
 if ($hwnd -ne [IntPtr]::Zero) {
-    $title = [MetroWin32]::GetText($hwnd)
+    $title = [UtaloomWin32]::GetText($hwnd)
     if ([string]::IsNullOrWhiteSpace($title)) {
         $proc.Refresh()
         $title = $proc.MainWindowTitle
@@ -285,8 +285,8 @@ if ($hwnd -ne [IntPtr]::Zero) {
         throw "Expected window title to match 'Utaloom', got '$title'"
     }
 
-    $rect = New-Object MetroWin32+RECT
-    if ([MetroWin32]::GetWindowRect($hwnd, [ref]$rect)) {
+    $rect = New-Object UtaloomWin32+RECT
+    if ([UtaloomWin32]::GetWindowRect($hwnd, [ref]$rect)) {
         $width = $rect.Right - $rect.Left
         $height = $rect.Bottom - $rect.Top
         Write-Host "Detected window dimensions: ${width}x${height}"
@@ -315,7 +315,7 @@ if ($hwnd -ne [IntPtr]::Zero) {
     $closed = $proc.CloseMainWindow()
     if (-not $closed) {
         Write-Warning "CloseMainWindow returned false; sending WM_CLOSE via PostMessage."
-        [MetroWin32]::PostMessage($hwnd, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+        [UtaloomWin32]::PostMessage($hwnd, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
     }
 } else {
     Write-Host "Stopping process in headless session..."

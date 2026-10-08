@@ -1,7 +1,7 @@
 package com.utaloom.ui
 
 import androidx.compose.runtime.mutableStateListOf
-import com.metrolist.innertube.models.BrowseEndpoint
+import com.utaloom.innertube.models.BrowseEndpoint
 
 sealed interface Screen {
     data object Home : Screen

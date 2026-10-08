@@ -1,7 +1,7 @@
 package com.utaloom
 
 import com.utaloom.playback.StreamResolver
-import com.metrolist.innertube.YouTube
+import com.utaloom.innertube.YouTube
 import kotlinx.coroutines.runBlocking
 
 /** Dev check: `bash gradlew :app:probe -PvideoId=...` resolves a direct VLC-compatible stream. */

@@ -10,7 +10,7 @@ import com.utaloom.ui.decodePlaylist
 import com.utaloom.ui.loginCookieError
 import com.utaloom.ui.playlistNameError
 import com.utaloom.ui.serverUrlError
-import com.metrolist.innertube.YouTube
+import com.utaloom.innertube.YouTube
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -97,11 +97,11 @@ class WorkflowAcceptanceTest {
         val search = YouTube.search("daft punk", YouTube.SearchFilter.FILTER_SONG).getOrThrow()
         assertTrue("Song search returned items", search.items.isNotEmpty())
 
-        val song = search.items.filterIsInstance<com.metrolist.innertube.models.SongItem>().first()
+        val song = search.items.filterIsInstance<com.utaloom.innertube.models.SongItem>().first()
         val suggestions = YouTube.searchSuggestions("daft").getOrThrow()
         assertTrue("Suggestions returned queries", suggestions.queries.isNotEmpty())
 
-        val albumRef = home.sections.flatMap { it.items }.filterIsInstance<com.metrolist.innertube.models.AlbumItem>().firstOrNull()
+        val albumRef = home.sections.flatMap { it.items }.filterIsInstance<com.utaloom.innertube.models.AlbumItem>().firstOrNull()
         if (albumRef != null) {
             val album = YouTube.album(albumRef.browseId).getOrThrow()
             assertTrue("Album songs resolved", album.songs.isNotEmpty())

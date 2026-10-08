@@ -33,8 +33,8 @@ import com.utaloom.playback.Player
 import com.utaloom.playback.Downloads
 import com.utaloom.together.ListenTogether
 import com.utaloom.ui.*
-import com.metrolist.innertube.YouTube
-import com.metrolist.innertube.models.YouTubeLocale
+import com.utaloom.innertube.YouTube
+import com.utaloom.innertube.models.YouTubeLocale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

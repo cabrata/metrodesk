@@ -60,7 +60,7 @@ compose.desktop {
             targetFormats(TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.AppImage, TargetFormat.Msi, TargetFormat.Exe)
             packageName = "utaloom"
             packageVersion = appVersion
-            description = "Desktop YouTube Music client based on Metrolist"
+            description = "Desktop YouTube Music client"
             vendor = "Utaloom"
             licenseFile.set(rootProject.file("LICENSE"))
             modules("java.net.http", "java.sql", "jdk.unsupported", "java.naming", "jdk.security.auth")

@@ -24,9 +24,9 @@ import com.utaloom.data.Stores
 import com.utaloom.data.toSong
 import com.utaloom.playback.Downloads
 import com.utaloom.playback.Player
-import com.metrolist.innertube.YouTube
-import com.metrolist.innertube.models.SongItem
-import com.metrolist.innertube.models.YTItem
+import com.utaloom.innertube.YouTube
+import com.utaloom.innertube.models.SongItem
+import com.utaloom.innertube.models.YTItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

@@ -75,7 +75,7 @@ private val wordBlock = Regex("""^<(.+)>$""")
 fun plainLyrics(provider: String, text: String) = Lyrics(provider, false, text.lines().map { LyricLine(0, it) }, text)
 
 /**
- * Parses LRC, including multiple time tags per line and Metrolist's extended format:
+ * Parses LRC, including multiple time tags per line and the extended format:
  * `{agent:v1}`/`{bg}` voice tags and a following `<word:startSec:endSec|...>` word-sync line.
  */
 fun parseLrc(provider: String, lrc: String): Lyrics {

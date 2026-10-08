@@ -16,8 +16,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.utaloom.data.Stores
 import com.utaloom.shared.cookieError
-import com.metrolist.innertube.YouTube
-import com.metrolist.innertube.models.YouTubeLocale
+import com.utaloom.innertube.YouTube
+import com.utaloom.innertube.models.YouTubeLocale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException

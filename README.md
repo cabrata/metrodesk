@@ -1,9 +1,9 @@
 # Utaloom
 
-Desktop YouTube Music client for **Linux and Windows**, based on [Metrolist](https://github.com/MetrolistGroup/Metrolist).
+Desktop YouTube Music client for **Linux and Windows**.
 Built with Kotlin, Compose Multiplatform (Material 3) and libVLC.
 
-Utaloom reuses Metrolist's `innertube` parsing module and InnerTubeX extraction. It is a separate desktop port, not a complete Android feature-for-feature replacement. Linux and Windows share one JVM UI, with portable parsing/validation in Kotlin Multiplatform `shared/commonMain`.
+Linux and Windows share one JVM UI, with portable parsing/validation in Kotlin Multiplatform `shared/commonMain`.
 
 ## Screenshots
 
@@ -22,11 +22,11 @@ Utaloom reuses Metrolist's `innertube` parsing module and InnerTubeX extraction.
 - Home feed, Explore (new releases, moods & genres, charts), search with suggestions and filters
 - Albums, artists, playlists, podcasts, "Listen again"
 - Player with queue, shuffle, repeat, radio (endless autoplay), sleep timer, volume normalization
-- Synced lyrics with word-by-word (karaoke) highlighting. Providers like Metrolist: BetterLyrics, LrcLib, KuGou, Paxsenix, LyricsPlus (off by default), Zemer, YouTube subtitles, YouTube Music. They are tried in order with fallback, and you can reorder or toggle them in Settings → Lyrics providers
+- Synced lyrics with word-by-word (karaoke) highlighting. Providers: BetterLyrics, LrcLib, KuGou, Paxsenix, LyricsPlus (off by default), Zemer, YouTube subtitles, YouTube Music. They are tried in order with fallback, and you can reorder or toggle them in Settings → Lyrics providers
 - Library: liked songs, history, local playlists, saved albums/artists/playlists
 - Optional YouTube account login (cookie) to see your own library and recommendations
 - Downloads for offline playback
-- **Listen Together**, compatible with Metrolist Android rooms (same metroserver protocol)
+- **Listen Together**: listen in sync with friends in a shared room
 - Dynamic theme from album art, light/dark mode
 - System tray, media keys, keyboard shortcuts, MPRIS on Linux (desktop media controls)
 
@@ -69,10 +69,9 @@ Packages bundle their own Java runtime.
 ## Listen Together
 
 Open **Together**, enter a username, then **Create room** and share the code, or **Join room** with a friend's code.
-Desktop and Android Metrolist users can be in the same room as long as everyone uses the same server.
+Everyone in a room must use the same server.
 
 The default server is `wss://metrolist.caliph.dev/ws`. You can change it in **Settings**.
-Hosting your own: see [metroserver](https://github.com/MetrolistGroup/metroserver).
 
 ## Signing in
 
@@ -115,10 +114,10 @@ For remote/headless Linux testing, run with `JAVA_TOOL_OPTIONS=-Dskiko.renderApi
 Project layout:
 
 - `shared/` Kotlin Multiplatform logic (lyrics parsing, input validation)
-- `innertube/` YouTube Music parsing/API module copied from Metrolist, with a JVM build and desktop logging shim
+- `innertube/` YouTube Music parsing/API module, with a JVM build and desktop logging shim
 - `app/` desktop app: UI, player, Listen Together, downloads
 
-## Differences from Metrolist Android
+## Limitations
 
 Not available on desktop yet: Google sign-in through a web page, account sync of likes/playlists back to YouTube, equalizer, crossfade, song recognition, widgets, Discord rich presence, Chromecast.
 
@@ -130,4 +129,6 @@ Linux and Windows CI both run parser/input/codec tests plus native VLC paused bu
 
 ## License
 
-GPL-3.0, same as Metrolist. Not affiliated with Google or YouTube.
+GPL-3.0. Not affiliated with Google or YouTube.
+
+Parts of `innertube/` and the lyrics providers are derived from the GPL-3.0 project [Metrolist](https://github.com/MetrolistGroup/Metrolist) (credited as the license requires). Utaloom is an independent project and is not affiliated with or endorsed by Metrolist or its maintainers.

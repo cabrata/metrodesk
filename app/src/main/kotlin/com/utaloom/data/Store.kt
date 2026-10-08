@@ -1,9 +1,9 @@
 package com.utaloom.data
 
 import com.utaloom.lyrics.LyricsRepository
-import com.metrolist.innertube.models.Album
-import com.metrolist.innertube.models.Artist
-import com.metrolist.innertube.models.SongItem
+import com.utaloom.innertube.models.Album
+import com.utaloom.innertube.models.Artist
+import com.utaloom.innertube.models.SongItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview

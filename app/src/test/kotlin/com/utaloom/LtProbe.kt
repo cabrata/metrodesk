@@ -13,7 +13,7 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString.Companion.toByteString
 
-/** Dev check against a live metroserver: `bash gradlew :app:ltProbe` (host+guest create/join/approve/sync). */
+/** Dev check against a live Listen Together server: `bash gradlew :app:ltProbe` (host+guest create/join/approve/sync). */
 private class Peer(name: String, url: String) {
     val inbox = Channel<Pair<String, ByteArray>>(Channel.UNLIMITED)
     val ws: WebSocket = OkHttpClient().newWebSocket(Request.Builder().url(url).header("User-Agent", "Utaloom/1.0 okhttp").build(), object : WebSocketListener() {
