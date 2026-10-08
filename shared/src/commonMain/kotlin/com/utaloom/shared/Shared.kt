@@ -67,9 +67,10 @@ fun isNewerVersion(latest: String, current: String): Boolean {
     return false
 }
 
-private val timeTag = Regex("""\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?]""")
+// Escape closing ] and } explicitly: Android's ICU regex rejects them unescaped (JVM accepts).
+private val timeTag = Regex("""\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]""")
 private val wordTag = Regex("""<\d+:\d+[.:]\d+>""")
-private val voiceTag = Regex("""^\{(agent:\w+|bg)}""")
+private val voiceTag = Regex("""^\{(agent:\w+|bg)\}""")
 private val wordBlock = Regex("""^<(.+)>$""")
 
 fun plainLyrics(provider: String, text: String) = Lyrics(provider, false, text.lines().map { LyricLine(0, it) }, text)

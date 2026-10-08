@@ -1,7 +1,6 @@
 package com.utaloom.android
 
 import android.content.Intent
-import android.graphics.Bitmap
 import android.app.NotificationManager
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -13,6 +12,7 @@ import com.utaloom.data.Stores
 import com.utaloom.data.toSong
 import com.utaloom.innertube.YouTube
 import com.utaloom.innertube.models.SongItem
+import com.utaloom.lyrics.LyricsRepository
 import com.utaloom.playback.Player
 import com.utaloom.playback.PlayerHooks
 import org.junit.Assert.*
@@ -115,6 +115,12 @@ class UtaloomAcceptanceTest {
                 Player.state.value.positionMs > 1000 && Player.state.value.isPlaying
             }
             assertTrue("Live extracted YouTube stream plays on Android", Player.state.value.isPlaying)
+            val lyrics = runBlocking {
+                withTimeout(120_000) { LyricsRepository.get(song, Stores.settings.value.lyricsProviders) }
+            }
+            assertNotNull("Real lyrics providers must return lyrics for the played song", lyrics)
+            assertTrue("Fetched lyrics contain rendered lines", lyrics!!.lines.count { it.text.isNotBlank() } >= 2)
+            android.util.Log.i("UtaloomAcceptance", "Fetched ${lyrics.lines.size} lyric lines from ${lyrics.provider} for ${song.title}")
         } finally { main { Player.stop() } }
     }
 }
