@@ -46,9 +46,9 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            task: packageDeb packageRpm
+            task: packageReleaseDeb packageReleaseRpm
           - os: windows-latest
-            task: packageMsi
+            task: packageReleaseMsi
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -71,9 +71,9 @@ jobs:
         with:
           name: release-${{ runner.os }}
           path: |
-            app/build/compose/binaries/main/deb/*.deb
-            app/build/compose/binaries/main/rpm/*.rpm
-            app/build/compose/binaries/main/msi/*.msi
+            app/build/compose/binaries/main-release/deb/*.deb
+            app/build/compose/binaries/main-release/rpm/*.rpm
+            app/build/compose/binaries/main-release/msi/*.msi
           if-no-files-found: error
 
   publish:

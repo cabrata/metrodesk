@@ -50,6 +50,12 @@ compose.desktop {
     application {
         mainClass = "com.metrodesk.MainKt"
         jvmArgs += listOf("-Xmx768m", "-Dmetrodesk.version=$appVersion")
+        // packageRelease* tasks run ProGuard to drop unused code (mainly the huge icons pack).
+        buildTypes.release.proguard {
+            configurationFiles.from(project.file("proguard-rules.pro"))
+            obfuscate.set(false)
+            optimize.set(false)
+        }
         nativeDistributions {
             targetFormats(TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.AppImage, TargetFormat.Msi, TargetFormat.Exe)
             packageName = "metrodesk"
