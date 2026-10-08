@@ -27,6 +27,12 @@ class SharedTest {
     }
 
     @Test
+    fun groupsSyllablesIntoWords() {
+        val w = listOf(LyricWord("Ne", 0, 1), LyricWord("ver ", 1, 2), LyricWord("gon", 2, 3), LyricWord("na", 3, 4), LyricWord("x", 4, 5))
+        assertEquals(listOf(listOf("Ne", "ver"), listOf("gon", "na"), listOf("x")), lyricWordGroups("Never gonna", w).map { g -> g.map { it.text } })
+    }
+
+    @Test
     fun validatesCookie() {
         assertNull(cookieError("a=1; SAPISID=x"))
         assertNotNull(cookieError("SAPISID=x\nEvil: y"))

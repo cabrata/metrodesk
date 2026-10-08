@@ -9,6 +9,28 @@ data class Lyrics(val provider: String, val synced: Boolean, val lines: List<Lyr
     fun currentIndex(posMs: Long): Int = if (!synced) -1 else lines.indexOfLast { !it.background && it.timeMs <= posMs + 300 }
 }
 
+/**
+ * Groups timed syllables ("Ne","ver") into the space-separated words of [text], so a karaoke view can
+ * wrap only between words. Syllables not found in the text become their own word.
+ */
+fun lyricWordGroups(text: String, words: List<LyricWord>): List<List<LyricWord>> {
+    val out = mutableListOf<MutableList<LyricWord>>()
+    var cursor = 0
+    var open = false
+    for (w in words) {
+        val t = w.text.trim()
+        if (t.isEmpty()) continue
+        val at = text.indexOf(t, cursor)
+        if (at < 0) { out += mutableListOf(w.copy(text = t)); open = false; continue }
+        // Start a new word unless this syllable directly continues the previous one.
+        if (!open || at != cursor) out += mutableListOf<LyricWord>()
+        out.last() += w.copy(text = t)
+        cursor = at + t.length
+        open = cursor < text.length && !text[cursor].isWhitespace()
+    }
+    return out
+}
+
 private val timeTag = Regex("""\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?]""")
 private val wordTag = Regex("""<\d+:\d+[.:]\d+>""")
 private val voiceTag = Regex("""^\{(agent:\w+|bg)}""")

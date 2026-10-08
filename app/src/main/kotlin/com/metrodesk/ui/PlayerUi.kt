@@ -1,6 +1,36 @@
 package com.metrodesk.ui
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import com.metrodesk.shared.LyricLine
+import com.metrodesk.shared.lyricWordGroups
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.sin
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,9 +95,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.withFrameNanos
@@ -263,6 +290,8 @@ fun FullPlayer(onClose: () -> Unit) {
     val guest = isGuest()
     var tab by remember { mutableStateOf(0) } // 0 lyrics, 1 queue
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        // Apple Music style backdrop: the cover art, heavily blurred, tints the whole view.
+        AsyncImage(hiRes(s.current?.thumbnail, 120), null, Modifier.fillMaxSize().graphicsLayer { alpha = 0.45f; scaleX = 1.3f; scaleY = 1.3f }.blur(90.dp), contentScale = ContentScale.Crop)
         Column(Modifier.fillMaxSize().padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClose) { Icon(Icons.Default.ExpandMore, "Close player") }
@@ -375,29 +404,41 @@ fun LyricsPanel(modifier: Modifier = Modifier) {
                 }
             }
         } else {
-            val current = ly.currentIndex(s.positionMs)
+            val pos = smoothPosition(s.positionMs, s.isPlaying)
+            val current = ly.currentIndex(pos)
             val list = rememberLazyListState()
-            LaunchedEffect(song.id, current) { if (current >= 0) list.animateScrollToItem((current - 2).coerceAtLeast(0)) }
-            LazyColumn(Modifier.weight(1f), state = list, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                itemsIndexed(ly.lines) { i, line ->
-                    val active = i == current
-                    val dim = MaterialTheme.colorScheme.onSurface.copy(alpha = if (line.background) 0.25f else 0.3f)
-                    val lineStyle = if (line.background) style.copy(fontSize = fontSize * 0.7f, lineHeight = fontSize * 0.9f, fontStyle = FontStyle.Italic) else style
-                    Text(
-                        if (active && line.words.isNotEmpty()) karaoke(line.text, line.words, smoothPosition(s.positionMs, s.isPlaying), MaterialTheme.colorScheme.onSurface, dim)
-                        else AnnotatedString(line.text.ifBlank { "♪" }),
-                        style = lineStyle,
-                        color = when {
-                            active -> MaterialTheme.colorScheme.onSurface
-                            i < current -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
-                            else -> dim
-                        },
-                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-                            .clickable(enabled = !guest) { Player.seekTo(line.timeMs); if (!s.isPlaying) Player.play() }
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                    )
+            val hover = remember { MutableInteractionSource() }
+            val hovered by hover.collectIsHoveredAsState()
+            val first = ly.lines.firstOrNull { !it.background }
+            // Item 0 holds the intro dots, so line i is item i + 1.
+            LaunchedEffect(song.id, current) { list.animateScrollToItem(current + 1) }
+            BoxWithConstraints(
+                Modifier.weight(1f).hoverable(hover)
+                    // Soft fade at the top and bottom edges, like Apple Music.
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.1f to Color.Black, 0.8f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+                    },
+            ) {
+                LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(top = maxHeight * 0.25f, bottom = maxHeight * 0.7f)) {
+                    item {
+                        Box(Modifier.animateContentSize()) {
+                            if (first != null && first.timeMs > 4000 && pos < first.timeMs - 300) InterludeDots(pos.toFloat() / (first.timeMs - 300), pos)
+                        }
+                    }
+                    itemsIndexed(ly.lines) { i, line ->
+                        // Background vocals right after the current line light up with it.
+                        val active = i == current || (current >= 0 && i > current && line.background && line.timeMs <= pos + 300 && (current + 1 until i).all { ly.lines[it].background })
+                        val next = ly.lines.drop(i + 1).firstOrNull { !it.background }?.timeMs
+                        LyricRow(
+                            line, active, distance = if (current < 0) i + 1 else abs(i - current), pos = if (active) pos else 0L, next = if (active) next else null,
+                            style = if (line.background) style.copy(fontSize = fontSize * 0.7f, lineHeight = fontSize * 0.9f, fontStyle = FontStyle.Italic) else style,
+                            sharp = hovered,
+                            onClick = if (guest) null else ({ Player.seekTo(line.timeMs); if (!s.isPlaying) Player.play() }),
+                        )
+                    }
                 }
-                item { Spacer(Modifier.height(200.dp)) }
             }
         }
         Text("Source: ${ly.provider}", Modifier.padding(16.dp, 4.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -419,24 +460,86 @@ private fun smoothPosition(reported: Long, playing: Boolean): Long {
 }
 
 /**
- * Sung words are fully lit, the current word fills left to right by its own timing, the rest stay dim.
- * Words are located in the line text so syllable splits ("ne|ver") keep the original spacing.
+ * One lyric line, Apple Music style: the active line is full size and sharp, the others shrink, dim and blur
+ * with distance (sharp while hovered so they are easy to read and click). Word-synced lines fill word by word.
  */
-private fun karaoke(text: String, words: List<LyricWord>, pos: Long, lit: Color, dim: Color) = buildAnnotatedString {
-    append(text)
-    var cursor = 0
-    var litUntil = 0
-    for (w in words) {
-        val at = text.indexOf(w.text.trim(), cursor).takeIf { it >= 0 } ?: continue
-        val end = at + w.text.trim().length
-        cursor = end
-        litUntil = when {
-            pos >= w.endMs -> end
-            pos < w.startMs -> break
-            // ponytail: fills per character, not per pixel; a gradient brush per glyph would be smoother.
-            else -> at + ((end - at) * (pos - w.startMs) / (w.endMs - w.startMs).coerceAtLeast(1)).toInt()
+@Composable
+private fun LyricRow(line: LyricLine, active: Boolean, distance: Int, pos: Long, next: Long?, style: TextStyle, sharp: Boolean, onClick: (() -> Unit)?) {
+    val color = MaterialTheme.colorScheme.onSurface
+    val d = distance.coerceAtMost(4)
+    val motion = spring<Float>(dampingRatio = 0.8f, stiffness = 120f)
+    val scale by animateFloatAsState(if (active) 1f else 0.94f, motion)
+    val alpha by animateFloatAsState(if (active) 1f else if (sharp) 0.5f else 0.42f - d * 0.05f, motion)
+    val blur by animateDpAsState(if (active || sharp) 0.dp else (d * 1.2f).dp, spring(stiffness = 120f))
+    val wordEnd = line.words.lastOrNull()?.endMs
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(12.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale; this.alpha = alpha; transformOrigin = TransformOrigin(0f, 0.5f) }
+            .blur(blur, BlurredEdgeTreatment.Unbounded)
+            .animateContentSize(),
+    ) {
+        when {
+            // Instrumental gap marked by an empty LRC line: breathing dots instead of a note.
+            line.text.isBlank() -> if (active && next != null) InterludeDots((pos - line.timeMs).toFloat() / (next - line.timeMs), pos) else Text("♪", style = style, color = color)
+            active && line.words.isNotEmpty() -> {
+                val gap = with(LocalDensity.current) { (style.fontSize * 0.26f).toDp() }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    for (w in lyricWordGroups(line.text, line.words)) KaraokeWord(w, pos, style, color)
+                }
+            }
+            else -> Text(line.text, style = style, color = color)
+        }
+        // Long pause after a word-synced line: dots fill until the next line starts.
+        if (active && wordEnd != null && next != null && next - wordEnd >= 4500 && pos in wordEnd + 300..next - 300)
+            InterludeDots((pos - wordEnd - 300).toFloat() / (next - wordEnd - 600), pos)
+    }
+}
+
+/** A word fills left to right with a soft edge, lifts slightly as it is sung, and glows when held long. */
+@Composable
+private fun KaraokeWord(sylls: List<LyricWord>, pos: Long, style: TextStyle, color: Color) {
+    val text = sylls.joinToString("") { it.text }
+    var lit = 0f
+    for (w in sylls) {
+        val f = ((pos - w.startMs).toFloat() / (w.endMs - w.startMs).coerceAtLeast(1)).coerceIn(0f, 1f)
+        lit += f * w.text.length
+        if (f < 1f) break
+    }
+    val p = lit / text.length.coerceAtLeast(1)
+    val start = sylls.first().startMs
+    val dur = sylls.last().endMs - start
+    val rise = ((pos - start).toFloat() / dur.coerceAtLeast(250)).coerceIn(0f, 1f)
+    val glow = if (dur > 1000 && p > 0f && p < 1f) sin(p * PI).toFloat() else 0f
+    val dim = color.copy(alpha = 0.35f)
+    val brush = when {
+        p <= 0f -> SolidColor(dim)
+        p >= 1f -> SolidColor(color)
+        else -> {
+            val e = 0.12f
+            val q = -e + p * (1 + 2 * e)
+            Brush.horizontalGradient((q - e).coerceIn(0f, 1f) to color, (q + e).coerceIn(0f, 1f) to dim)
         }
     }
-    addStyle(SpanStyle(color = lit), 0, litUntil)
-    addStyle(SpanStyle(color = dim), litUntil, text.length)
+    Text(
+        text,
+        style = style.copy(brush = brush, shadow = if (glow > 0f) Shadow(color.copy(alpha = 0.7f * glow), blurRadius = 28f * glow) else null),
+        modifier = Modifier.graphicsLayer {
+            translationY = -3.dp.toPx() * (1 - (1 - rise) * (1 - rise) * (1 - rise))
+            scaleX = 1 + 0.03f * glow; scaleY = scaleX
+            transformOrigin = TransformOrigin(0.5f, 1f)
+        },
+    )
+}
+
+/** Three dots that fill one by one with [progress] and gently breathe. */
+@Composable
+private fun InterludeDots(progress: Float, pos: Long) {
+    val color = MaterialTheme.colorScheme.onSurface
+    val breathe = 1f + 0.12f * sin(pos / 1000.0 * 4).toFloat()
+    val fade = (minOf(progress, 1 - progress) * 8).coerceIn(0f, 1f)
+    Row(Modifier.padding(vertical = 14.dp).graphicsLayer { scaleX = breathe * fade; scaleY = breathe * fade; transformOrigin = TransformOrigin(0f, 0.5f) }, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        repeat(3) { k -> Box(Modifier.size(14.dp).background(color.copy(alpha = 0.3f + 0.7f * (progress * 3 - k).coerceIn(0f, 1f)), CircleShape)) }
+    }
 }
