@@ -7,11 +7,15 @@ Metrodesk reuses Metrolist's `innertube` parsing module and InnerTubeX extractio
 
 ## Screenshots
 
-![Home](docs/screenshots/home.png)
+![Full-screen player with word-synced lyrics](docs/screenshots/lyrics-fullscreen.png)
 
-| Search & player | Synced lyrics |
+| Home | Explore |
 | --- | --- |
-| ![Search](docs/screenshots/search.png) | ![Player with lyrics](docs/screenshots/player-lyrics.png) |
+| ![Home](docs/screenshots/home.png) | ![Explore](docs/screenshots/explore.png) |
+| **Search** | **Artist page with lyrics panel** |
+| ![Search](docs/screenshots/search.png) | ![Artist page with lyrics panel](docs/screenshots/artist-lyrics.png) |
+| **Up next queue** | |
+| ![Queue](docs/screenshots/queue.png) | |
 
 ## Features
 

@@ -114,3 +114,8 @@ tasks.register<JavaExec>("togetherAcceptance") {
     environment("XDG_DATA_HOME", layout.buildDirectory.dir("together-smoke-data").get().asFile.absolutePath)
     environment("APPDATA", layout.buildDirectory.dir("together-smoke-data").get().asFile.absolutePath)
 }
+
+// Keep tests away from the user's real library/settings.
+tasks.withType<Test>().configureEach {
+    environment("XDG_DATA_HOME", layout.buildDirectory.dir("test-data").get().asFile.absolutePath)
+}
