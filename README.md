@@ -1,9 +1,9 @@
 # Utaloom
 
-Desktop YouTube Music client for **Linux and Windows**.
-Built with Kotlin, Compose Multiplatform (Material 3) and libVLC.
+YouTube Music client for **Android, Linux and Windows**.
+Built with Kotlin and Compose Multiplatform (Material 3), with Media3 on Android and libVLC on desktop.
 
-Linux and Windows share one JVM UI, with portable parsing/validation in Kotlin Multiplatform `shared/commonMain`.
+All platforms compile the same Utaloom UI, library, extraction, lyrics and Listen Together sources. Android adds only native playback, service, storage and document-picker adapters. No separate Metrolist application is vendored here.
 
 ## Screenshots
 
@@ -29,12 +29,13 @@ Linux and Windows share one JVM UI, with portable parsing/validation in Kotlin M
 - **Listen Together**: listen in sync with friends in a shared room
 - Dynamic theme from album art, light/dark mode
 - System tray, media keys, keyboard shortcuts, MPRIS on Linux (desktop media controls)
+- Android: phone navigation, touch menus, background audio and notification/headset controls
 
 ## Install
 
 ### Requirements
 
-Playback uses **libVLC**, but you don't need to install it yourself:
+Android requires **Android 8.0 or newer** and uses Media3, with no VLC or Java download. Desktop uses **libVLC**, supplied by the installer/package manager:
 
 | Package | VLC |
 |---------|-----|
@@ -50,10 +51,11 @@ If VLC is installed somewhere unusual, set `VLC_PATH` to the folder that contain
 Grab the latest build from [Releases](../../releases) or the [Actions](../../actions) artifacts:
 
 - **Windows**: `utaloom-x.y.z.msi`
+- **Android**: `utaloom-vx.y.z-android.apk`. Allow installation from the browser/file manager when Android asks. It installs as **Utaloom** (`com.utaloom.android`), separately from an existing Metrolist installation.
 - **Debian/Ubuntu**: `utaloom_x.y.z_amd64.deb` (`sudo apt install ./utaloom_*.deb`)
 - **Other Linux**: the portable app folder, run `bin/utaloom`
 
-Packages bundle their own Java runtime.
+Desktop packages bundle their own Java runtime. Android release APKs are signed, and future versions use the same signing key.
 
 ## Keyboard shortcuts
 
@@ -82,7 +84,7 @@ Utaloom has no embedded browser, so sign-in uses your YouTube Music cookie:
 3. Copy the full `Cookie` request header.
 4. Paste it in **Settings → Account**.
 
-The cookie is stored only on your computer and is **not encrypted**. On Linux the settings file is owner-only. On Windows it inherits your user-profile folder permissions. Treat it like a password and never share `settings.json`.
+The cookie is stored only on your device and is **not encrypted**. On Android it is in app-private storage and excluded from backups. On Linux the settings file is owner-only. On Windows it inherits your user-profile folder permissions. Treat it like a password and never share `settings.json`.
 
 ## Data location
 
@@ -90,6 +92,7 @@ The cookie is stored only on your computer and is **not encrypted**. On Linux th
 |----|--------|
 | Windows | `%APPDATA%\utaloom` |
 | Linux | `~/.local/share/utaloom` |
+| Android | App-private `files/utaloom` (no storage permission needed). Use the system document picker to import/export playlists. |
 
 ## Build from source
 
@@ -111,11 +114,22 @@ Requires JDK 21 and VLC 64-bit. Run the Windows installer tasks on Windows, with
 On a drive without executable permissions, use `bash ./gradlew ...`. On Windows use `gradlew.bat ...` in PowerShell or Command Prompt.
 For remote/headless Linux testing, run with `JAVA_TOOL_OPTIONS=-Dskiko.renderApi=SOFTWARE` under Xvfb.
 
+Android uses the **same root Gradle wrapper**, JDK 21 and Android SDK 37 (target SDK 36). Set `ANDROID_HOME` or `sdk.dir` in an ignored `local.properties`:
+
+```bash
+bash gradlew :android:assembleDebug                  # signed, installable debug APK
+bash gradlew :android:connectedDebugAndroidTest      # emulator/device: launch, queue, prebuffer, seek, media controls, background audio
+bash gradlew :android:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.network=true # also live YouTube search/playback
+```
+
+The Android module is included for `:android:*` tasks or with `-Pandroid`, so desktop builders need no SDK. Release signing uses `UTALOOM_KEYSTORE` (file path), `UTALOOM_KEYSTORE_PASSWORD`, `UTALOOM_KEY_ALIAS` and `UTALOOM_KEY_PASSWORD` environment variables. GitHub Releases build and publish both the desktop installers and a signed APK from `appVersion`.
+
 Project layout:
 
 - `shared/` Kotlin Multiplatform logic (lyrics parsing, input validation)
 - `innertube/` YouTube Music parsing/API module, with a JVM build and desktop logging shim
-- `app/` desktop app: UI, player, Listen Together, downloads
+- `app/` shared Compose UI, queue/player logic, Listen Together, downloads and desktop host/adapters
+- `android/` native Android host and adapters. Gradle generates a filtered view of the shared sources under `android/build/`, never a second checked-in app copy.
 
 ## Limitations
 

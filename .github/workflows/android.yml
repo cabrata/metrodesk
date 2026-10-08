@@ -3,9 +3,9 @@ name: Android
 on:
   push:
     branches: [main]
-    paths: ["android/**", ".github/workflows/android.yml"]
+    paths: ["android/**", "app/src/main/kotlin/**", "app/src/main/proto/**", "innertube/**", "shared/**", "gradle/**", "*.gradle.kts", "gradle.properties", ".github/workflows/android.yml"]
   pull_request:
-    paths: ["android/**"]
+    paths: ["android/**", "app/src/main/kotlin/**", "app/src/main/proto/**", "innertube/**", "shared/**", "gradle/**", "*.gradle.kts", "gradle.properties", ".github/workflows/android.yml"]
   workflow_dispatch:
 
 permissions:
@@ -18,10 +18,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    defaults:
-      run:
-        working-directory: android
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -29,33 +26,10 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
-        with:
-          build-root-directory: android
-      - name: Build FOSS release APK
-        run: bash gradlew --console=plain assembleFossRelease -x lint -x lintFossRelease
-        env:
-          METROLIST_APPLICATION_ID: com.caliph.metrolist
-          METROLIST_APP_NAME: Metrolist
-          METROLIST_BUILD_COMMIT: ${{ github.sha }}
-          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-          LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
-      - name: Sign APK
-        id: sign
-        if: env.KEYSTORE != ''
-        env:
-          KEYSTORE: ${{ secrets.KEYSTORE }}
-        uses: ilharp/sign-android-release@v2.0.0
-        with:
-          releaseDir: android/app/build/outputs/apk/foss/release/
-          signingKey: ${{ secrets.KEYSTORE }}
-          keyAlias: ${{ secrets.KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
-          buildToolsVersion: 36.0.0
+      - name: Build installable Utaloom APK and test APK
+        run: bash gradlew :android:assembleDebug :android:assembleDebugAndroidTest --no-daemon --console=plain
       - uses: actions/upload-artifact@v4
         with:
-          name: android-apk
-          path: |
-            ${{ steps.sign.outputs.signedFile }}
-            android/app/build/outputs/apk/foss/release/*.apk
+          name: utaloom-android-debug
+          path: android/build/outputs/apk/debug/*.apk
           if-no-files-found: error

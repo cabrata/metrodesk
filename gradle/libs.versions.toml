@@ -12,9 +12,18 @@ vlcj = "4.12.1"
 protobuf = "4.36.2"
 protobufPlugin = "0.10.0"
 dbus = "5.2.2"
+agp = "9.4.1"
+media3 = "1.10.1"
 
 [libraries]
 innertubex-desktop = { module = "com.github.MetrolistGroup.innertubex:innertubex-desktop", version.ref = "innertubex" }
+innertubex-android = { module = "com.github.MetrolistGroup.innertubex:innertubex-android", version.ref = "innertubex" }
+activity-compose = { module = "androidx.activity:activity-compose", version = "1.12.4" }
+coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
+media3-session = { module = "androidx.media3:media3-session", version.ref = "media3" }
+media3-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "media3" }
+desugar = { module = "com.android.tools:desugar_jdk_libs", version = "2.1.5" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
@@ -41,3 +50,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 compose = { id = "org.jetbrains.compose", version.ref = "compose" }
 protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
+android-application = { id = "com.android.application", version.ref = "agp" }

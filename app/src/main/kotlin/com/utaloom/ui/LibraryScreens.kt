@@ -32,14 +32,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import java.io.File
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import java.util.Locale
-import javax.swing.JFileChooser
-import javax.swing.JOptionPane
-import javax.swing.filechooser.FileNameExtensionFilter
-import kotlinx.coroutines.swing.Swing
+import com.utaloom.platform.readPlaylistText
+import com.utaloom.platform.writePlaylistText
 
 private val playlistJson = Json { ignoreUnknownKeys = true; prettyPrint = true; encodeDefaults = true }
 private const val maxPlaylistBytes = 10 * 1024 * 1024
@@ -68,43 +63,10 @@ internal fun decodePlaylist(text: String): LocalPlaylist {
     return p.copy(name = p.name.trim())
 }
 
-private suspend fun choosePlaylistFile(save: Boolean, name: String = "playlist"): File? = withContext(Dispatchers.Swing) {
-    val chooser = JFileChooser().apply {
-        fileFilter = FileNameExtensionFilter("Utaloom playlist JSON", "json")
-        if (save) selectedFile = File(name.replace(Regex("[^A-Za-z0-9._ -]"), "_").take(100).ifBlank { "playlist" } + ".json")
-    }
-    if ((if (save) chooser.showSaveDialog(null) else chooser.showOpenDialog(null)) != JFileChooser.APPROVE_OPTION) null
-    else {
-        val selected = chooser.selectedFile
-        val file = if (save && !selected.name.endsWith(".json", true)) File(selected.path + ".json") else selected
-        if (save && file.exists() && JOptionPane.showConfirmDialog(null, "Replace ${file.name}?", "Confirm overwrite", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) null
-        else file
-    }
-}
+private suspend fun readPlaylistFile(): LocalPlaylist? = readPlaylistText(maxPlaylistBytes)?.let(::decodePlaylist)
 
-private suspend fun readPlaylistFile(): LocalPlaylist? {
-    val file = choosePlaylistFile(false) ?: return null
-    return withContext(Dispatchers.IO) {
-        require(file.isFile && file.length() <= maxPlaylistBytes) { "Choose a JSON file smaller than 10 MiB" }
-        val bytes = Files.newInputStream(file.toPath()).use { it.readNBytes(maxPlaylistBytes + 1) }
-        require(bytes.size <= maxPlaylistBytes) { "Playlist JSON is too large (10 MiB maximum)" }
-        decodePlaylist(bytes.toString(Charsets.UTF_8))
-    }
-}
-
-private suspend fun exportPlaylist(p: LocalPlaylist): Boolean {
-    val file = choosePlaylistFile(true, p.name) ?: return false
-    withContext(Dispatchers.IO) {
-        val target = file.toPath().toAbsolutePath()
-        val tmp = Files.createTempFile(target.parent, ".utaloom-", ".json")
-        try {
-            Files.writeString(tmp, playlistJson.encodeToString(LocalPlaylist.serializer(), p))
-            try { Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING) }
-            catch (_: java.nio.file.AtomicMoveNotSupportedException) { Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING) }
-        } finally { Files.deleteIfExists(tmp) }
-    }
-    return true
-}
+private suspend fun exportPlaylist(p: LocalPlaylist): Boolean =
+    writePlaylistText(p.name, playlistJson.encodeToString(LocalPlaylist.serializer(), p))
 
 private fun knownSongs(lib: LibraryState): List<Song> =
     (lib.history + lib.liked + lib.playlists.flatMap { it.songs } + lib.downloadedSongs.values + Stores.queue.value.songs).distinctBy { it.id }
@@ -137,10 +99,19 @@ private fun LibrarySelect(value: String, options: List<String>, onSelect: (Strin
 
 @Composable
 private fun LibrarySearch(query: String, onQuery: (String) -> Unit, sort: String, onSort: (String) -> Unit, options: List<String> = listOf("Original order", "Title", "Artist", "Duration")) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        OutlinedTextField(query, onQuery, Modifier.weight(1f), placeholder = { Text("Search this collection") }, singleLine = true,
+    @Composable
+    fun SearchField(modifier: Modifier) {
+        OutlinedTextField(query, onQuery, modifier, placeholder = { Text("Search this collection") }, singleLine = true,
             leadingIcon = { Icon(Icons.Default.Search, null) }, trailingIcon = { if (query.isNotEmpty()) IconButton({ onQuery("") }) { Icon(Icons.Default.Close, "Clear search") } })
-        LibrarySelect(sort, options, onSort)
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+        if (maxWidth < 552.dp) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SearchField(Modifier.fillMaxWidth())
+            LibrarySelect(sort, options, onSort)
+        } else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SearchField(Modifier.weight(1f))
+            LibrarySelect(sort, options, onSort)
+        }
     }
 }
 
@@ -149,7 +120,7 @@ private fun SongsHeader(title: String, songs: List<Song>) {
     Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(title, style = MaterialTheme.typography.headlineLarge)
         Text("${songs.size} songs • ${formatTime(songs.sumOf { (it.duration ?: 0) * 1000L })}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Button({ Player.playQueue(songs, title = title) }, enabled = songs.isNotEmpty()) { Icon(Icons.Default.PlayArrow, null); Text("Play") }
             OutlinedButton({ Player.playQueue(songs.shuffled(), title = title) }, enabled = songs.isNotEmpty()) { Icon(Icons.Default.Shuffle, null); Text("Shuffle") }
             OutlinedButton({ Player.addToQueue(songs) }, enabled = songs.isNotEmpty()) { Text("Add to queue") }
@@ -203,13 +174,13 @@ fun LibraryScreen() {
                 }, enabled = !fileBusy) { Text(if (fileBusy) "Importing…" else "Import JSON") }
             }
         }
-        Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(!account, { account = false }, { Text("On this device") })
             FilterChip(account, { account = true }, { Text("YouTube account") })
         }
         if (account) AccountLibrary(Modifier.weight(1f))
         else {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton({ Nav.go(Screen.SongList("Liked songs", "liked")) }) { Text("Liked (${lib.liked.size})") }
                 OutlinedButton({ Nav.go(Screen.SongList("Listening history", "history")) }) { Text("History (${lib.history.size})") }
                 OutlinedButton({ Nav.go(Screen.SongList("Downloads", "downloads")) }) { Text("Downloads (${lib.downloaded.size})") }
@@ -380,7 +351,7 @@ fun LocalPlaylistScreen(id: String) {
     val shown = visibleSongs(playlist.songs, query, sort, settings.hideExplicit)
     Column(Modifier.fillMaxSize()) {
         SongsHeader(playlist.name, shown)
-        Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton({ rename = true }) { Text("Rename") }
             TextButton({ add = true }) { Text("Add songs") }
             TextButton({
@@ -405,17 +376,25 @@ fun LocalPlaylistScreen(id: String) {
         }
         LibrarySearch(query, { query = it }, sort, { sort = it })
         if (shown.isEmpty()) EmptyBox(if (playlist.songs.isEmpty()) "Add songs from your library, search, or import a JSON playlist." else "No songs match the current filters.")
-        else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 32.dp)) {
-            itemsIndexed(shown, key = { _, song -> song.id }) { i, song ->
-                val original = playlist.songs.indexOfFirst { it.id == song.id }
-                SongRow(song, { Player.playQueue(shown, i, playlist.name) }, index = i + 1, playing = player.current?.id == song.id,
-                    extraMenu = { close -> MenuItem("Remove from this playlist", Icons.Default.Delete) { remove = song; close() } },
-                    trailing = {
-                        if (query.isBlank() && sort == "Original order" && (!settings.hideExplicit || playlist.songs.none { it.explicit })) {
+        else BoxWithConstraints(Modifier.weight(1f)) {
+            val compact = maxWidth < 600.dp
+            LazyColumn(contentPadding = PaddingValues(bottom = 32.dp)) {
+                itemsIndexed(shown, key = { _, song -> song.id }) { i, song ->
+                    val original = playlist.songs.indexOfFirst { it.id == song.id }
+                    val reorder = query.isBlank() && sort == "Original order" && (!settings.hideExplicit || playlist.songs.none { it.explicit })
+                    SongRow(song, { Player.playQueue(shown, i, playlist.name) }, index = i + 1, playing = player.current?.id == song.id,
+                        extraMenu = { close ->
+                            if (compact && reorder) {
+                                if (original > 0) MenuItem("Move up", Icons.Default.ArrowUpward) { Library.moveInPlaylist(id, original, original - 1); close() }
+                                if (original < playlist.songs.lastIndex) MenuItem("Move down", Icons.Default.ArrowDownward) { Library.moveInPlaylist(id, original, original + 1); close() }
+                            }
+                            MenuItem("Remove from this playlist", Icons.Default.Delete) { remove = song; close() }
+                        },
+                        trailing = if (compact || !reorder) null else ({
                             IconButton({ Library.moveInPlaylist(id, original, original - 1) }, enabled = original > 0) { Icon(Icons.Default.ArrowUpward, "Move ${song.title} up") }
                             IconButton({ Library.moveInPlaylist(id, original, original + 1) }, enabled = original < playlist.songs.lastIndex) { Icon(Icons.Default.ArrowDownward, "Move ${song.title} down") }
-                        }
-                    })
+                        }))
+                }
             }
         }
     }

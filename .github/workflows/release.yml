@@ -76,8 +76,47 @@ jobs:
             app/build/compose/binaries/main-release/msi/*.msi
           if-no-files-found: error
 
+  android:
+    needs: version
+    if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Restore Android signing key
+        env:
+          KEYSTORE: ${{ secrets.UTALOOM_KEYSTORE }}
+        run: |
+          test -n "$KEYSTORE" || { echo "::error::UTALOOM_KEYSTORE secret is required for installable release APKs"; exit 1; }
+          printf '%s' "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/utaloom-release.jks"
+          chmod 600 "$RUNNER_TEMP/utaloom-release.jks"
+      - name: Build signed Utaloom Android APK
+        env:
+          UTALOOM_KEYSTORE: ${{ runner.temp }}/utaloom-release.jks
+          UTALOOM_KEYSTORE_PASSWORD: ${{ secrets.UTALOOM_KEYSTORE_PASSWORD }}
+          UTALOOM_KEY_ALIAS: ${{ secrets.UTALOOM_KEY_ALIAS }}
+          UTALOOM_KEY_PASSWORD: ${{ secrets.UTALOOM_KEY_PASSWORD }}
+        run: |
+          bash gradlew :android:assembleRelease --no-daemon --console=plain
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify android/build/outputs/apk/release/android-release.apk
+          mkdir -p dist
+          cp android/build/outputs/apk/release/android-release.apk "dist/utaloom-${{ needs.version.outputs.tag }}-android.apk"
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/utaloom-release.jks"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-Android
+          path: dist/*.apk
+          if-no-files-found: error
+
   publish:
-    needs: [version, package]
+    needs: [version, package, android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

@@ -41,7 +41,17 @@ internal fun decodeRoomEnvelope(data: ByteArray): Pair<String, ByteArray> {
     require(data.size <= MAX_ROOM_PAYLOAD_BYTES) { "Room envelope exceeds 1 MiB" }
     val env = Envelope.parseFrom(data)
     val raw = env.payload.toByteArray()
-    val payload = if (env.compressed) GZIPInputStream(ByteArrayInputStream(raw)).use { it.readNBytes(MAX_ROOM_PAYLOAD_BYTES + 1) } else raw
+    val payload = if (env.compressed) GZIPInputStream(ByteArrayInputStream(raw)).use { input ->
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            require(output.size() + count <= MAX_ROOM_PAYLOAD_BYTES) { "Decoded room payload exceeds 1 MiB" }
+            output.write(buffer, 0, count)
+        }
+        output.toByteArray()
+    } else raw
     require(payload.size <= MAX_ROOM_PAYLOAD_BYTES) { "Decoded room payload exceeds 1 MiB" }
     return env.type to payload
 }
