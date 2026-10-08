@@ -15,7 +15,9 @@ import com.utaloom.innertube.YouTube
 import com.utaloom.innertube.models.SongItem
 import com.utaloom.playback.Player
 import com.utaloom.playback.PlayerHooks
-import junit.framework.TestCase
+import org.junit.Assert.*
+import org.junit.Before
+import org.junit.Test
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -25,22 +27,22 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Real APK + Media3 + service check. Run :android:connectedDebugAndroidTest, add -Pandroid.testInstrumentationRunnerArguments.network=true for live YouTube. */
-class UtaloomAcceptanceTest : TestCase() {
+class UtaloomAcceptanceTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
     private fun main(action: () -> Unit) = instrumentation.runOnMainSync(action)
-    private fun await(timeout: Long = 15_000, condition: () -> Boolean) = runBlocking {
-        withTimeout(timeout) { while (!condition()) delay(50) }
+    private fun await(timeout: Long = 15_000, step: String = "", condition: () -> Boolean) = runBlocking {
+        try { withTimeout(timeout) { while (!condition()) delay(50) } }
+        catch (e: kotlinx.coroutines.TimeoutCancellationException) { throw AssertionError("Timed out at '$step': ${Player.state.value}") }
     }
 
-    override fun setUp() {
-        super.setUp()
+    @Before fun setUp() {
         instrumentation.startActivitySync(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         instrumentation.waitForIdleSync()
         await { Player.available }
     }
 
-    fun testNativeBackgroundPlayerAndMediaControls() {
+    @Test fun testNativeBackgroundPlayerAndMediaControls() {
         val ready = AtomicBoolean()
         val first = Song("androidsmoke1", "Android audio check", listOf("Utaloom"), duration = 40)
         val second = first.copy(id = "androidsmoke2", title = "Next track check")
@@ -59,16 +61,16 @@ class UtaloomAcceptanceTest : TestCase() {
             Player.remoteControlled = true
             Player.hooks = object : PlayerHooks { override fun onBufferReady(songId: String) { ready.set(true) } }
             main { Player.playQueue(listOf(first, second), fromRemote = true, play = false) }
-            await { ready.get() && !Player.state.value.isBuffering }
+            await(step = "prebuffer") { ready.get() && !Player.state.value.isBuffering }
             assertFalse("Remote prebuffer must be silent", Player.state.value.isPlaying)
             main { Player.playQueue(listOf(second)) }
             assertEquals(first.id, Player.state.value.current?.id)
             main { Player.play(fromRemote = true) }
-            await { Player.state.value.positionMs > 500 }
+            await(step = "play") { Player.state.value.positionMs > 500 }
             main { Player.seekTo(5000, fromRemote = true) }
-            await { Player.state.value.positionMs >= 4900 }
+            await(step = "seek") { Player.state.value.positionMs >= 4900 }
             main { Player.pause(fromRemote = true) }
-            await { !Player.state.value.isPlaying }
+            await(step = "pause") { !Player.state.value.isPlaying }
             Player.remoteControlled = false
 
             val token = SessionToken(context, android.content.ComponentName(context, PlaybackService::class.java))
@@ -77,24 +79,18 @@ class UtaloomAcceptanceTest : TestCase() {
             controller = future.get(15, TimeUnit.SECONDS)
             val controls = controller
             main { controls.play() }
-            await { Player.state.value.isPlaying }
-            await { context.getSystemService(NotificationManager::class.java).activeNotifications.isNotEmpty() }
+            await(step = "controller play") { Player.state.value.isPlaying }
+            await(step = "notification") { context.getSystemService(NotificationManager::class.java).activeNotifications.isNotEmpty() }
             instrumentation.uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
             val position = Player.state.value.positionMs
-            await { Player.state.value.positionMs > position + 1000 }
+            await(step = "background") { Player.state.value.positionMs > position + 1000 }
             assertTrue("Playback survives app going to background", Player.state.value.isPlaying)
             main { controls.pause() }
-            await { !Player.state.value.isPlaying }
+            await(step = "controller pause") { !Player.state.value.isPlaying }
             main { controls.seekToNext() }
-            await { Player.state.value.current?.id == second.id && Player.state.value.isPlaying }
+            await(step = "controller next") { Player.state.value.current?.id == second.id && Player.state.value.isPlaying }
             main { controls.stop() }
-            await { Player.state.value.current == null && !Player.state.value.isPlaying }
-            instrumentation.startActivitySync(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            instrumentation.waitForIdleSync()
-            instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
-                context.filesDir.resolve("utaloom-android.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                bitmap.recycle()
-            }
+            await(step = "controller stop") { Player.state.value.current == null && !Player.state.value.isPlaying }
         } finally {
             main { controller?.release(); Player.remoteControlled = false; Player.stop() }
             Player.hooks = hooks
@@ -105,7 +101,7 @@ class UtaloomAcceptanceTest : TestCase() {
         }
     }
 
-    fun testLiveYouTubeSearchAndPlayback() {
+    @Test fun testLiveYouTubeSearchAndPlayback() {
         if (InstrumentationRegistry.getArguments().getString("network") != "true") return
         val song = runBlocking {
             withTimeout(60_000) { YouTube.search("Rick Astley Never Gonna Give You Up", YouTube.SearchFilter.FILTER_SONG).getOrThrow() }

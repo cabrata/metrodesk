@@ -24,11 +24,16 @@ class PlaybackService : MediaSessionService() {
             override fun addListener(listener: Media3Player.Listener) {
                 if (listener in forwarded) return
                 val owner = this
-                val wrapped = object : Media3Player.Listener by listener {
-                    override fun onAvailableCommandsChanged(commands: Media3Player.Commands) {
-                        listener.onAvailableCommandsChanged(owner.availableCommands)
+                // Kotlin `by` skips Java default methods, so a Proxy is needed to forward every other event.
+                val wrapped = java.lang.reflect.Proxy.newProxyInstance(listener.javaClass.classLoader, arrayOf(Media3Player.Listener::class.java)) { proxy, method, args ->
+                    when (method.name) {
+                        "onAvailableCommandsChanged" -> listener.onAvailableCommandsChanged(owner.availableCommands)
+                        "equals" -> args?.get(0) === proxy
+                        "hashCode" -> System.identityHashCode(proxy)
+                        "toString" -> listener.toString()
+                        else -> method.invoke(listener, *(args ?: emptyArray()))
                     }
-                }
+                } as Media3Player.Listener
                 forwarded[listener] = wrapped
                 super.addListener(wrapped)
             }
