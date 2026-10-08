@@ -46,6 +46,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -83,6 +84,9 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -102,6 +106,9 @@ import androidx.compose.runtime.withFrameNanos
 import com.utaloom.shared.LyricWord
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.Role as SemanticRole
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.utaloom.data.Library
@@ -126,7 +133,7 @@ private fun isGuest(): Boolean = ListenTogether.state.collectAsState().value.rol
 
 /** Seek slider that only commits on release so dragging doesn't spam seeks. */
 @Composable
-private fun SeekBar(s: PlayerState, enabled: Boolean, modifier: Modifier = Modifier) {
+private fun SeekBar(s: PlayerState, enabled: Boolean, modifier: Modifier = Modifier, compact: Boolean = false) {
     var dragging by remember(s.current?.id) { mutableStateOf(false) }
     var dragValue by remember { mutableFloatStateOf(0f) }
     val dur = s.durationMs.coerceAtLeast(1)
@@ -137,7 +144,7 @@ private fun SeekBar(s: PlayerState, enabled: Boolean, modifier: Modifier = Modif
             onValueChange = { dragging = true; dragValue = it },
             onValueChangeFinished = { if (enabled && !Player.remoteControlled) Player.seekTo((dragValue * dur).toLong()); dragging = false },
             enabled = enabled && s.current != null && s.durationMs > 0,
-            modifier = Modifier.height(24.dp),
+            modifier = Modifier.height(if (compact) 48.dp else 24.dp).semantics { contentDescription = "Playback position" },
         )
         Row(Modifier.fillMaxWidth()) {
             Text(formatTime(if (dragging) (dragValue * dur).toLong() else s.positionMs), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -148,9 +155,9 @@ private fun SeekBar(s: PlayerState, enabled: Boolean, modifier: Modifier = Modif
 }
 
 @Composable
-private fun Transport(s: PlayerState, guest: Boolean, big: Boolean) {
+private fun Transport(s: PlayerState, guest: Boolean, big: Boolean, compact: Boolean = false) {
     val size = if (big) 64.dp else 44.dp
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (big) 12.dp else 4.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else if (big) 12.dp else 4.dp)) {
         IconButton(Player::toggleShuffle, enabled = !guest) {
             Icon(Icons.Default.Shuffle, "Shuffle", tint = if (s.shuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -284,9 +291,99 @@ fun PlayerBar(onOpenFull: () -> Unit, onOpenQueue: () -> Unit, onOpenLyrics: () 
     }
 }
 
-/** Full-screen now playing view with artwork on the left and lyrics/queue on the right. */
+/** Phone controls stay separate from the tappable title so their accessibility actions do not overlap. */
 @Composable
-fun FullPlayer(onClose: () -> Unit) {
+fun MobilePlayerBar(onOpenFull: () -> Unit) {
+    val s by Player.state.collectAsState()
+    val song = s.current ?: return
+    val guest = isGuest()
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 3.dp) {
+        Column {
+            Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable(onClickLabel = "Open player", role = SemanticRole.Button, onClick = onOpenFull).padding(6.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Thumb(song.thumbnail, 44.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
+                        Text(song.artistText, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                IconButton(Player::playPause, enabled = !guest) {
+                    if (s.isBuffering) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                    else Icon(if (s.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, if (s.isPlaying) "Pause" else "Play")
+                }
+                IconButton({ Player.next() }, enabled = !guest && s.hasNext) { Icon(Icons.Default.SkipNext, "Next") }
+            }
+            LinearProgressIndicator(
+                progress = { (s.positionMs.toFloat() / s.durationMs.coerceAtLeast(1)).coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().height(2.dp).semantics { contentDescription = "Playback progress" },
+            )
+        }
+    }
+}
+
+enum class PlayerPage { NOW_PLAYING, LYRICS, QUEUE }
+
+@Composable
+private fun MobileFullPlayer(onClose: () -> Unit, initialPage: PlayerPage) {
+    val s by Player.state.collectAsState()
+    val guest = isGuest()
+    var page by remember(initialPage) { mutableStateOf(initialPage) }
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClose) { Icon(Icons.Default.ExpandMore, "Close player") }
+                Text(s.queueTitle ?: "Now playing", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                SleepTimerButton(s, guest)
+            }
+            TabRow(selectedTabIndex = page.ordinal) {
+                PlayerPage.entries.forEach { item ->
+                    Tab(selected = page == item, onClick = { page = item }, text = {
+                        Text(when (item) { PlayerPage.NOW_PLAYING -> "Playing"; PlayerPage.LYRICS -> "Lyrics"; PlayerPage.QUEUE -> "Up next" })
+                    })
+                }
+            }
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                when (page) {
+                    PlayerPage.LYRICS -> LyricsPanel(compact = true)
+                    PlayerPage.QUEUE -> QueuePanel(compact = true)
+                    PlayerPage.NOW_PLAYING -> {
+                        val artSize = minOf(360.dp, (maxWidth - 48.dp).coerceAtLeast(1.dp), (maxHeight - 240.dp).coerceAtLeast(160.dp))
+                        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            item { Thumb(hiRes(s.current?.thumbnail), artSize, RoundedCornerShape(16.dp)) }
+                            item {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(s.current?.title ?: "Nothing playing", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        Text(s.current?.artistText.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    s.current?.let { LikeButton(it) }
+                                }
+                            }
+                            item {
+                                SeekBar(s, enabled = !guest, modifier = Modifier.fillMaxWidth(), compact = true)
+                                Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) { Transport(s, guest, big = true, compact = true) }
+                            }
+                            item {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                                    if (guest) GuestBadge()
+                                    s.current?.let { DownloadButton(it) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Full-screen now playing adapts to phone pages instead of squeezing two columns. */
+@Composable
+fun FullPlayer(onClose: () -> Unit, compact: Boolean = false, initialPage: PlayerPage = PlayerPage.NOW_PLAYING) {
+    if (compact) return MobileFullPlayer(onClose, initialPage)
     val s by Player.state.collectAsState()
     val guest = isGuest()
     var tab by remember { mutableStateOf(0) } // 0 lyrics, 1 queue
@@ -336,7 +433,7 @@ fun FullPlayer(onClose: () -> Unit) {
 
 /** Current queue with click-to-play, reorder and remove (host / solo only). */
 @Composable
-fun QueuePanel(modifier: Modifier = Modifier) {
+fun QueuePanel(modifier: Modifier = Modifier, compact: Boolean = false) {
     val s by Player.state.collectAsState()
     val guest = isGuest()
     val list = rememberLazyListState()
@@ -354,7 +451,12 @@ fun QueuePanel(modifier: Modifier = Modifier) {
                     song,
                     onClick = { if (!guest) Player.skipTo(i) },
                     playing = i == s.index,
-                    trailing = if (guest) null else ({
+                    extraMenu = if (guest || !compact) null else ({ close ->
+                        if (i > 0) MenuItem("Move up", Icons.Default.ArrowUpward) { Player.moveInQueue(i, i - 1); close() }
+                        if (i < s.queue.lastIndex) MenuItem("Move down", Icons.Default.ArrowDownward) { Player.moveInQueue(i, i + 1); close() }
+                        MenuItem("Remove from queue", Icons.Default.Close) { Player.removeFromQueue(i); close() }
+                    }),
+                    trailing = if (guest || compact) null else ({
                         Row {
                             IconButton({ Player.moveInQueue(i, i - 1) }, enabled = i > 0) { Icon(Icons.Default.ArrowUpward, "Move up", Modifier.size(18.dp)) }
                             IconButton({ Player.moveInQueue(i, i + 1) }, enabled = i < s.queue.lastIndex) { Icon(Icons.Default.ArrowDownward, "Move down", Modifier.size(18.dp)) }
@@ -369,7 +471,7 @@ fun QueuePanel(modifier: Modifier = Modifier) {
 
 /** Synced lyrics: auto-scrolls to the active line, click a line to seek (host / solo only). */
 @Composable
-fun LyricsPanel(modifier: Modifier = Modifier) {
+fun LyricsPanel(modifier: Modifier = Modifier, compact: Boolean = false) {
     val s by Player.state.collectAsState()
     val settings by Stores.settings.state.collectAsState()
     val guest = isGuest()
@@ -436,7 +538,7 @@ fun LyricsPanel(modifier: Modifier = Modifier) {
                         LyricRow(
                             line, active, distance = if (current < 0) i + 1 else abs(i - current), pos = if (active) pos else 0L,
                             style = if (line.background) style.copy(fontSize = fontSize * 0.7f, lineHeight = fontSize * 0.9f, fontStyle = FontStyle.Italic) else style,
-                            sharp = hovered,
+                            sharp = hovered || compact,
                             onClick = if (guest) null else ({ Player.seekTo(line.timeMs); if (!s.isPlaying) Player.play() }),
                         )
                     }

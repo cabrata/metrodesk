@@ -62,7 +62,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
-import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -158,7 +158,7 @@ fun YTItem.subtitle(): String = when (this) {
     is EpisodeItem -> listOfNotNull("Episode", author?.name).joinToString(" • ")
 }
 
-@OptIn(ExperimentalFoundationApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SongRow(
     song: Song,
@@ -180,8 +180,18 @@ fun SongRow(
             .padding(horizontal = 12.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(bg)
-            .combinedClickable(onClick = onClick, onDoubleClick = onClick)
-            .onPointerEvent(PointerEventType.Press) { if (it.buttons.isSecondaryPressed) menu = true }
+            .combinedClickable(onClick = onClick, onDoubleClick = onClick, onLongClickLabel = "Song actions", onLongClick = { menu = true })
+            .pointerInput(song.id) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                            menu = true
+                            event.changes.forEach { it.consume() }
+                        }
+                    }
+                }
+            }
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -207,7 +217,7 @@ fun SongRow(
         if (isLiked) Icon(Icons.Default.Favorite, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
         song.duration?.let { Text(formatTime(it * 1000L), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         Box {
-            IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "More") }
+            IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "More actions for ${song.title}") }
             SongMenu(song, menu, { menu = false }, extraMenu)
         }
     }
@@ -274,14 +284,24 @@ fun AddToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit) {
 fun Modifier.combinedClickableCompat(onClick: () -> Unit) = this.then(Modifier.combinedClickable(onClick = onClick))
 
 /** Square / round card used in carousels and grids. */
-@OptIn(ExperimentalFoundationApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ItemCard(item: YTItem, width: Dp = 168.dp, onClick: () -> Unit = { openItem(item) }) {
     var menu by remember { mutableStateOf(false) }
     val round = item is ArtistItem
     Column(
-        Modifier.width(width).clip(RoundedCornerShape(12.dp)).combinedClickable(onClick = onClick)
-            .onPointerEvent(PointerEventType.Press) { if (it.buttons.isSecondaryPressed) menu = true }
+        Modifier.width(width).clip(RoundedCornerShape(12.dp)).combinedClickable(onClick = onClick, onLongClickLabel = "Item actions", onLongClick = { menu = true })
+            .pointerInput(item.id) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                            menu = true
+                            event.changes.forEach { it.consume() }
+                        }
+                    }
+                }
+            }
             .padding(8.dp),
         horizontalAlignment = if (round) Alignment.CenterHorizontally else Alignment.Start,
     ) {

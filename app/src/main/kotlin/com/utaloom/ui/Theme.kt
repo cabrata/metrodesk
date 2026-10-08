@@ -8,26 +8,35 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import java.awt.Color as AwtColor
 
 val DefaultSeed = Color(0xFF0A84FF)
 
-/** Builds a Material 3 tonal scheme from one seed color using HSB tones (close enough to M3 without a HCT lib). */
+internal fun rgbToHsv(r: Float, g: Float, b: Float): FloatArray {
+    val max = maxOf(r, g, b)
+    val delta = max - minOf(r, g, b)
+    val hue = when {
+        delta == 0f -> 0f
+        max == r -> ((g - b) / delta + 6f) % 6f
+        max == g -> (b - r) / delta + 2f
+        else -> (r - g) / delta + 4f
+    }
+    return floatArrayOf(hue * 60f, if (max == 0f) 0f else delta / max, max)
+}
+
+/** ponytail: HSV tones preserve the existing palette, use HCT only if exact M3 tones are required. */
 fun schemeFromSeed(seed: Color, dark: Boolean): ColorScheme {
-    val hsb = AwtColor.RGBtoHSB((seed.red * 255).toInt(), (seed.green * 255).toInt(), (seed.blue * 255).toInt(), null)
+    val hsb = rgbToHsv(seed.red, seed.green, seed.blue)
     val h = hsb[0]
     val s = hsb[1].coerceIn(0.35f, 0.9f)
-    fun tone(sat: Float, bri: Float, hue: Float = h) = Color(AwtColor.HSBtoRGB(hue, sat.coerceIn(0f, 1f), bri.coerceIn(0f, 1f)))
-    val h2 = (h + 0.08f) % 1f
-    val h3 = (h + 0.33f) % 1f
+    fun tone(sat: Float, bri: Float, hue: Float = h) = Color.hsv(hue, sat.coerceIn(0f, 1f), bri.coerceIn(0f, 1f))
+    val h2 = (h + 28.8f) % 360f
+    val h3 = (h + 118.8f) % 360f
     return if (dark) darkColorScheme(
         primary = tone(s * 0.55f, 0.92f),
         onPrimary = tone(s, 0.22f),
@@ -92,9 +101,9 @@ fun extractSeed(img: ImageBitmap): Color? {
     val step = maxOf(1, minOf(px.width, px.height) / 48)
     for (y in 0 until px.height step step) for (x in 0 until px.width step step) {
         val c = px[x, y]
-        val hsb = AwtColor.RGBtoHSB((c.red * 255).toInt(), (c.green * 255).toInt(), (c.blue * 255).toInt(), null)
+        val hsb = rgbToHsv(c.red, c.green, c.blue)
         if (hsb[1] < 0.2f || hsb[2] < 0.2f) continue
-        val b = buckets.getOrPut((hsb[0] * 24).toInt()) { FloatArray(5) }
+        val b = buckets.getOrPut((hsb[0] / 15f).toInt()) { FloatArray(5) }
         b[0] += 1f; b[1] += hsb[1] * hsb[2]; b[2] += c.red; b[3] += c.green; b[4] += c.blue
     }
     val best = buckets.values.maxByOrNull { it[1] } ?: return null
@@ -130,6 +139,3 @@ fun UtaloomTheme(seed: Color, dark: Boolean, content: @Composable () -> Unit) {
 }
 
 val LyricStyle = TextStyle(fontWeight = FontWeight.Bold, fontSize = 26.sp, lineHeight = 34.sp)
-
-@Suppress("unused")
-private fun Color.argb() = toArgb()

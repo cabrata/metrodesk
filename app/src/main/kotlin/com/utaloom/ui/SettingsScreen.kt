@@ -101,7 +101,7 @@ private fun SettingsChoice(title: String, description: String, selected: String,
 }
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(isMobile: Boolean = System.getProperty("java.vm.name") == "Dalvik") {
     val s by Stores.settings.state.collectAsState()
     val lib by Stores.library.state.collectAsState()
     var login by remember { mutableStateOf(false) }
@@ -110,22 +110,38 @@ fun SettingsScreen() {
         item { SectionTitle("Settings") }
         item {
             SectionTitle("YouTube Music account")
-            Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                if (s.accountAvatar != null) Thumb(s.accountAvatar, 56.dp)
-                Column(Modifier.weight(1f)) {
+            @Composable
+            fun AccountDetails(modifier: Modifier) {
+                Column(modifier) {
                     Text(s.accountName ?: "Not signed in", style = MaterialTheme.typography.titleMedium)
                     s.accountEmail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     Text("Cookie login connects your account library. Local likes and playlists stay on this device.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+            }
+            @Composable
+            fun AccountActions() {
                 OutlinedButton({ login = true }) { Text(if (s.cookie == null) "Sign in" else "Update login") }
                 if (s.cookie != null) TextButton({ confirm = "signout" }) { Text("Sign out") }
+            }
+            BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
+                if (maxWidth < 500.dp) Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        if (s.accountAvatar != null) Thumb(s.accountAvatar, 56.dp)
+                        AccountDetails(Modifier.weight(1f))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { AccountActions() }
+                } else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    if (s.accountAvatar != null) Thumb(s.accountAvatar, 56.dp)
+                    AccountDetails(Modifier.weight(1f))
+                    AccountActions()
+                }
             }
         }
         item { UpdateRow() }
         item { HorizontalDivider(Modifier.padding(horizontal = 24.dp)); SectionTitle("Appearance") }
         item { SettingsChoice("Theme", "Follow your system or choose a fixed appearance.", s.darkMode, listOf("system" to "System", "dark" to "Dark", "light" to "Light")) { v -> Stores.settings.update { it.copy(darkMode = v) } } }
         item { SettingsToggle("Dynamic color", "Use the current track artwork for the app accent color.", s.dynamicColor) { v -> Stores.settings.update { it.copy(dynamicColor = v) } } }
-        item { SettingsToggle("Minimize to tray", "Keep Utaloom running when you close its window, if a system tray is available.", s.minimizeToTray) { v -> Stores.settings.update { it.copy(minimizeToTray = v) } } }
+        if (!isMobile) item { SettingsToggle("Minimize to tray", "Keep Utaloom running when you close its window, if a system tray is available.", s.minimizeToTray) { v -> Stores.settings.update { it.copy(minimizeToTray = v) } } }
         item {
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
                 Text("Lyrics text size: ${s.lyricsTextSize} sp", style = MaterialTheme.typography.titleMedium)
@@ -155,7 +171,7 @@ fun SettingsScreen() {
         item { SettingsToggle("Pause listening history", "Do not record new songs or play counts locally.", s.pauseHistory) { v -> Stores.settings.update { it.copy(pauseHistory = v) } } }
         item { SettingsToggle("Pause search history", "Do not save new searches locally.", s.pauseSearchHistory) { v -> Stores.settings.update { it.copy(pauseSearchHistory = v) } } }
         item {
-            Row(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(Modifier.padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton({ confirm = "history" }, enabled = lib.history.isNotEmpty() || lib.playCounts.isNotEmpty()) { Text("Clear listening history") }
                 TextButton({ confirm = "search" }, enabled = lib.searchHistory.isNotEmpty()) { Text("Clear search history") }
             }
@@ -195,15 +211,27 @@ private fun ContentLocaleFields(language: String, country: String) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Content locale", style = MaterialTheme.typography.titleMedium)
         Text("YouTube content language and country, not the app interface language.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(lang, { lang = it.take(35) }, Modifier.weight(1f), label = { Text("Language (en, id, pt-BR)") }, singleLine = true)
-            OutlinedTextField(region, { region = it.take(2) }, Modifier.width(150.dp), label = { Text("Country (US, ID)") }, singleLine = true)
+        @Composable
+        fun ApplyLocale() {
             OutlinedButton({
                 val hl = lang.trim()
                 val gl = region.trim().uppercase(Locale.ROOT)
                 YouTube.locale = YouTubeLocale(gl = gl, hl = hl)
                 Stores.settings.update { it.copy(contentLanguage = hl, contentCountry = gl) }
             }, enabled = valid && (lang.trim() != language || region.trim().uppercase(Locale.ROOT) != country)) { Text("Apply") }
+        }
+        BoxWithConstraints {
+            if (maxWidth < 500.dp) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(lang, { lang = it.take(35) }, Modifier.fillMaxWidth(), label = { Text("Language (en, id, pt-BR)") }, singleLine = true)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(region, { region = it.take(2) }, Modifier.weight(1f), label = { Text("Country (US, ID)") }, singleLine = true)
+                    ApplyLocale()
+                }
+            } else Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(lang, { lang = it.take(35) }, Modifier.weight(1f), label = { Text("Language (en, id, pt-BR)") }, singleLine = true)
+                OutlinedTextField(region, { region = it.take(2) }, Modifier.width(150.dp), label = { Text("Country (US, ID)") }, singleLine = true)
+                ApplyLocale()
+            }
         }
         if (!valid) Text("Use a language tag and a two-letter ISO country code.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
     }
