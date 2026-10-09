@@ -13,6 +13,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -70,10 +72,13 @@ fun UtaloomApp(
     val downloadErrors by Downloads.errors.collectAsState()
     val dark = when (settings.darkMode) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
     var seed by remember { mutableStateOf(DefaultSeed) }
-    var fullPlayer by remember { mutableStateOf(false) }
-    var fullPage by remember { mutableStateOf(PlayerPage.NOW_PLAYING) }
-    var panel by remember { mutableStateOf(Panel.NONE) }
+    var fullPlayer by rememberSaveable { mutableStateOf(false) }
+    var fullPage by rememberSaveable { mutableStateOf(PlayerPage.NOW_PLAYING) }
+    var panel by rememberSaveable { mutableStateOf(Panel.NONE) }
     val snackbar = remember { SnackbarHostState() }
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     backHandler(fullPlayer || panel != Panel.NONE || Nav.stack.size > 1) {
         when {
@@ -115,7 +120,7 @@ fun UtaloomApp(
     UtaloomTheme(seed, dark) {
         Surface(color = MaterialTheme.colorScheme.background) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
-                val compact = maxWidth < 600.dp
+                val compact = maxWidth < 840.dp
                 val panelWidth = minOf(380.dp, maxWidth * 0.4f)
                 LaunchedEffect(compact) {
                     if (compact && panel != Panel.NONE) {
@@ -138,20 +143,23 @@ fun UtaloomApp(
                             }
                         }
                     }
-                    if (player.current != null) {
-                        if (compact) MobilePlayerBar(onOpenFull = { fullPage = PlayerPage.NOW_PLAYING; fullPlayer = true })
+                    if (player.current != null && (!compact || !keyboardVisible)) {
+                        if (compact) MobilePlayerBar(onOpenFull = {
+                            focus.clearFocus(); keyboard?.hide()
+                            fullPage = PlayerPage.NOW_PLAYING; fullPlayer = true
+                        })
                         else PlayerBar(
                             onOpenFull = { fullPage = PlayerPage.NOW_PLAYING; fullPlayer = true },
                             onOpenQueue = { panel = if (panel == Panel.QUEUE) Panel.NONE else Panel.QUEUE },
                             onOpenLyrics = { panel = if (panel == Panel.LYRICS) Panel.NONE else Panel.LYRICS },
                         )
                     }
-                    if (compact) BottomNavigation()
+                    if (compact && !keyboardVisible) BottomNavigation()
                 }
                 AnimatedVisibility(fullPlayer && player.current != null) {
                     FullPlayer(onClose = { fullPlayer = false }, compact = compact, initialPage = fullPage)
                 }
-                val bottom = if (fullPlayer) 16.dp else if (compact) {
+                val bottom = if (fullPlayer || keyboardVisible) 16.dp else if (compact) {
                     if (player.current != null) 152.dp else 88.dp
                 } else if (player.current != null) 96.dp else 16.dp
                 SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = bottom))
@@ -201,7 +209,7 @@ private fun BottomNavigation() {
             NavigationBarItem(current == screen, onClick = { Nav.root(screen) }, icon = {
                 val badge = if (screen == Screen.Together) lt.joinRequests.size + lt.suggestions.size else 0
                 BadgedBox(badge = { if (badge > 0) Badge { Text("$badge") } }) { Icon(icon, label) }
-            }, label = { Text(label, maxLines = 1) })
+            }, label = { Text(label, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }, alwaysShowLabel = current == screen)
         }
     }
 }
@@ -209,7 +217,7 @@ private fun BottomNavigation() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TopBar(compact: Boolean) {
-    var query by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
     var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
     var focused by remember { mutableStateOf(false) }
     val lib by Stores.library.state.collectAsState()

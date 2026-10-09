@@ -3,6 +3,8 @@ package com.utaloom.ui
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -100,9 +102,11 @@ fun hiRes(url: String?, size: Int = 544): String? = url
 
 @Composable
 fun Thumb(url: String?, size: Dp, shape: Shape = RoundedCornerShape(8.dp), modifier: Modifier = Modifier) {
+    var loaded by remember(url) { mutableStateOf(false) }
     Box(modifier.size(size).clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHigh), contentAlignment = Alignment.Center) {
-        if (url == null) Icon(Icons.Default.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        else AsyncImage(hiRes(url, if (size > 80.dp) 544 else 120), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        if (!loaded) Icon(Icons.Default.MusicNote, null, Modifier.size(minOf(size / 3, 48.dp)), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (url != null) AsyncImage(hiRes(url, if (size > 80.dp) 544 else 120), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
+            onSuccess = { loaded = true }, onError = { loaded = false })
     }
 }
 
@@ -118,7 +122,7 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier, action: (@Composab
 fun Loading(modifier: Modifier = Modifier.fillMaxSize()) = Box(modifier, contentAlignment = Alignment.Center) { CircularProgressIndicator() }
 
 @Composable
-fun ErrorBox(message: String, retry: (() -> Unit)? = null) = Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+fun ErrorBox(message: String, retry: (() -> Unit)? = null) = Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), contentAlignment = Alignment.Center) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(message, color = MaterialTheme.colorScheme.error)
         if (retry != null) TextButton(retry) { Text("Retry") }
@@ -126,7 +130,7 @@ fun ErrorBox(message: String, retry: (() -> Unit)? = null) = Box(Modifier.fillMa
 }
 
 @Composable
-fun EmptyBox(message: String, icon: ImageVector = Icons.Default.MusicNote) = Box(Modifier.fillMaxSize().padding(48.dp), contentAlignment = Alignment.Center) {
+fun EmptyBox(message: String, icon: ImageVector = Icons.Default.MusicNote) = Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), contentAlignment = Alignment.Center) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Icon(icon, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)

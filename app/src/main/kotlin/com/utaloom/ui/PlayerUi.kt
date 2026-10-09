@@ -5,6 +5,8 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -80,6 +82,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -95,6 +98,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -157,7 +161,11 @@ private fun SeekBar(s: PlayerState, enabled: Boolean, modifier: Modifier = Modif
 @Composable
 private fun Transport(s: PlayerState, guest: Boolean, big: Boolean, compact: Boolean = false) {
     val size = if (big) 64.dp else 44.dp
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else if (big) 12.dp else 4.dp)) {
+    Row(
+        modifier = if (compact) Modifier.fillMaxWidth() else Modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (compact) Arrangement.SpaceBetween else Arrangement.spacedBy(if (big) 12.dp else 4.dp),
+    ) {
         IconButton(Player::toggleShuffle, enabled = !guest) {
             Icon(Icons.Default.Shuffle, "Shuffle", tint = if (s.shuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -297,14 +305,15 @@ fun MobilePlayerBar(onOpenFull: () -> Unit) {
     val s by Player.state.collectAsState()
     val song = s.current ?: return
     val guest = isGuest()
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 3.dp) {
+    Surface(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp).clip(RoundedCornerShape(16.dp)), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 3.dp) {
         Column {
             Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(
-                    Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable(onClickLabel = "Open player", role = SemanticRole.Button, onClick = onOpenFull).padding(6.dp),
+                    Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable(onClickLabel = "Open player", role = SemanticRole.Button, onClick = onOpenFull)
+                        .semantics { contentDescription = "Open player" }.padding(6.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Thumb(song.thumbnail, 44.dp)
+                    Thumb(song.thumbnail, 44.dp, RoundedCornerShape(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
                         Text(song.artistText, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -330,15 +339,18 @@ enum class PlayerPage { NOW_PLAYING, LYRICS, QUEUE }
 private fun MobileFullPlayer(onClose: () -> Unit, initialPage: PlayerPage) {
     val s by Player.state.collectAsState()
     val guest = isGuest()
-    var page by remember(initialPage) { mutableStateOf(initialPage) }
+    var page by rememberSaveable(initialPage) { mutableStateOf(initialPage) }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClose) { Icon(Icons.Default.ExpandMore, "Close player") }
-                Text(s.queueTitle ?: "Now playing", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Column(Modifier.weight(1f)) {
+                    Text("Now playing", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(s.queueTitle ?: "Your queue", style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 SleepTimerButton(s, guest)
             }
-            TabRow(selectedTabIndex = page.ordinal) {
+            PrimaryTabRow(selectedTabIndex = page.ordinal) {
                 PlayerPage.entries.forEach { item ->
                     Tab(selected = page == item, onClick = { page = item }, text = {
                         Text(when (item) { PlayerPage.NOW_PLAYING -> "Playing"; PlayerPage.LYRICS -> "Lyrics"; PlayerPage.QUEUE -> "Up next" })
@@ -350,32 +362,30 @@ private fun MobileFullPlayer(onClose: () -> Unit, initialPage: PlayerPage) {
                     PlayerPage.LYRICS -> LyricsPanel(compact = true)
                     PlayerPage.QUEUE -> QueuePanel(compact = true)
                     PlayerPage.NOW_PLAYING -> {
-                        val artSize = minOf(360.dp, (maxWidth - 48.dp).coerceAtLeast(1.dp), (maxHeight - 240.dp).coerceAtLeast(160.dp))
-                        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            item { Thumb(hiRes(s.current?.thumbnail), artSize, RoundedCornerShape(16.dp)) }
-                            item {
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(s.current?.title ?: "Nothing playing", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                        Text(s.current?.artistText.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    }
-                                    s.current?.let { LikeButton(it) }
-                                }
+                        Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 8.dp)) {
+                            // Let the artwork give up space before playback controls, including with large fonts.
+                            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(bottom = 12.dp), contentAlignment = Alignment.Center) {
+                                val artSize = minOf(360.dp, maxWidth, maxHeight).coerceAtLeast(1.dp)
+                                Thumb(hiRes(s.current?.thumbnail), artSize, RoundedCornerShape(20.dp), Modifier.semantics { contentDescription = "Now playing artwork" })
                             }
-                            item {
-                                SeekBar(s, enabled = !guest, modifier = Modifier.fillMaxWidth(), compact = true)
-                                Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) { Transport(s, guest, big = true, compact = true) }
-                            }
-                            item {
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                                    if (guest) GuestBadge()
-                                    s.current?.let { DownloadButton(it) }
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(s.current?.title ?: "Nothing playing", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text(s.current?.artistText.orEmpty(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
+                                s.current?.let { LikeButton(it) }
+                            }
+                            SeekBar(s, enabled = !guest, modifier = Modifier.fillMaxWidth().padding(top = 4.dp), compact = true)
+                            Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) { Transport(s, guest, big = true, compact = true) }
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                s.current?.let { DownloadButton(it) }
+                                if (guest) GuestBadge() else VolumeControl(s)
                             }
                         }
                     }
                 }
             }
+            if (page != PlayerPage.NOW_PLAYING) MobilePlayerBar(onOpenFull = { page = PlayerPage.NOW_PLAYING })
         }
     }
 }
@@ -490,7 +500,7 @@ fun LyricsPanel(modifier: Modifier = Modifier, compact: Boolean = false) {
     val result = lyrics ?: return Loading(modifier)
     val ly = result.getOrNull()
     if (ly == null) {
-        return Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        return Box(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(result.exceptionOrNull()?.message?.let { "Couldn't load lyrics: $it" } ?: "No lyrics found", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton({ LyricsRepository.invalidate(song.id); reload++ }) { Text("Retry") }
