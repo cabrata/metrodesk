@@ -60,12 +60,8 @@ fun applySession() {
 
 private enum class Panel { NONE, QUEUE, LYRICS }
 
-/** Platform hosts own safe drawing insets and may inject their native Back handler. */
 @Composable
-fun UtaloomApp(
-    vlcError: String? = null,
-    backHandler: @Composable (enabled: Boolean, onBack: () -> Unit) -> Unit = { _, _ -> },
-) {
+fun UtaloomApp(vlcError: String? = null) {
     val settings by Stores.settings.state.collectAsState()
     val player by Player.state.collectAsState()
     val lt by ListenTogether.state.collectAsState()
@@ -80,13 +76,6 @@ fun UtaloomApp(
     val keyboard = LocalSoftwareKeyboardController.current
     val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
-    backHandler(fullPlayer || panel != Panel.NONE || Nav.stack.size > 1) {
-        when {
-            fullPlayer -> fullPlayer = false
-            panel != Panel.NONE -> panel = Panel.NONE
-            else -> Nav.back()
-        }
-    }
     LaunchedEffect(player.current) {
         if (player.current == null) { fullPlayer = false; panel = Panel.NONE }
     }

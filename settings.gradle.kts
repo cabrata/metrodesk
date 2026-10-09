@@ -23,7 +23,4 @@ dependencyResolutionManagement {
 include(":shared")
 include(":innertube")
 include(":app")
-// Desktop builds need no Android SDK. Both platforms use this wrapper and source tree.
-if (providers.gradleProperty("android").isPresent || gradle.startParameter.taskNames.any { it.startsWith(":android:") }) {
-    include(":android")
-}
+
