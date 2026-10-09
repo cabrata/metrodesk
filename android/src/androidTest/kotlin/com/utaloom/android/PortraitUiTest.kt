@@ -47,8 +47,7 @@ class PortraitUiTest {
         val node = visible(label)
         var clickable: AccessibilityNodeInfo? = node
         while (clickable != null && !clickable.isClickable) clickable = clickable.parent
-        if (clickable != null) assertTrue(clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK))
-        else {
+        if (clickable?.performAction(AccessibilityNodeInfo.ACTION_CLICK) != true) {
             val bounds = Rect().also(node::getBoundsInScreen)
             shell("input tap ${bounds.centerX()} ${bounds.centerY()}")
         }

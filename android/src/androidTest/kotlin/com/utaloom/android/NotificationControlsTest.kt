@@ -50,7 +50,7 @@ class NotificationControlsTest {
         assertTrue("System UI $label click", button.performAction(AccessibilityNodeInfo.ACTION_CLICK))
     }
     private fun capture(stage: String) {
-        val directory = context.getExternalFilesDir(null)
+        val directory = File(context.filesDir, "notification-checks").apply { mkdirs() }
         instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
             File(directory, "notification-$stage.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
             bitmap.recycle()
