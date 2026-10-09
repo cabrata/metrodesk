@@ -38,7 +38,7 @@ class NotificationControlsTest {
     private fun find(node: AccessibilityNodeInfo?, label: String): AccessibilityNodeInfo? {
         if (node == null) return null
         val description = node.contentDescription?.toString()?.trim()
-        val labels = when (label) { "Next" -> listOf("Next", "Next track", "Skip to next"); "Previous" -> listOf("Previous", "Previous track", "Skip to previous"); else -> listOf(label) }
+        val labels = when (label) { "Next" -> listOf("Next", "Next track", "Skip to next", "Seek to next item"); "Previous" -> listOf("Previous", "Previous track", "Skip to previous", "Seek to previous item"); else -> listOf(label) }
         if (node.packageName?.toString() == "com.android.systemui" && labels.any { description.equals(it, ignoreCase = true) } && node.isClickable) return node
         for (index in 0 until node.childCount) find(node.getChild(index), label)?.let { return it }
         return null
