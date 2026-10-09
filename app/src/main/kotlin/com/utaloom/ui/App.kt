@@ -209,7 +209,7 @@ private fun BottomNavigation() {
             NavigationBarItem(current == screen, onClick = { Nav.root(screen) }, icon = {
                 val badge = if (screen == Screen.Together) lt.joinRequests.size + lt.suggestions.size else 0
                 BadgedBox(badge = { if (badge > 0) Badge { Text("$badge") } }) { Icon(icon, label) }
-            }, label = { Text(label, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }, alwaysShowLabel = current == screen)
+            }, label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }, alwaysShowLabel = current == screen)
         }
     }
 }

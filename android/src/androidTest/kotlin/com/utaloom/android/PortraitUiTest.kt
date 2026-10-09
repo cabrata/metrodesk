@@ -96,7 +96,9 @@ class PortraitUiTest {
             tap("Together")
             visible("Create room")
             tap("Your name")
-            Thread.sleep(300)
+            shell("input text Portrait")
+            val keyboardEnd = android.os.SystemClock.uptimeMillis() + 5_000
+            while (nodes(automation.rootInActiveWindow).any { it.contentDescription?.toString() == "Explore" && it.isVisibleToUser } && android.os.SystemClock.uptimeMillis() < keyboardEnd) Thread.sleep(100)
             assertFalse("Keyboard gives content space instead of retaining bottom navigation", nodes(automation.rootInActiveWindow).any { it.contentDescription?.toString() == "Explore" && it.isVisibleToUser })
             shell("input keyevent KEYCODE_BACK")
         } finally {
