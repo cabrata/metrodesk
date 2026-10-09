@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.utaloom.data.Stores
+import com.utaloom.playback.Player
 import com.utaloom.shared.cookieError
 import com.utaloom.innertube.YouTube
 import com.utaloom.innertube.models.YouTubeLocale
@@ -190,6 +191,7 @@ fun SettingsScreen(isMobile: Boolean = System.getProperty("java.vm.name") == "Da
         item { HorizontalDivider(Modifier.padding(horizontal = 24.dp)); SectionTitle("Playback") }
         item { SettingsChoice("Audio quality", "Applies when loading the next track. Downloads use high quality.", s.audioQuality, listOf("AUTO" to "Automatic", "HIGH" to "High", "LOW" to "Low")) { v -> Stores.settings.update { it.copy(audioQuality = v) } } }
         item { SettingsToggle("Volume normalization", "Reduce volume differences between tracks. Applies when loading the next track.", s.normalizeVolume) { v -> Stores.settings.update { it.copy(normalizeVolume = v) } } }
+        item { SettingsToggle("Smart shuffle", "Mix a recommended song after every three songs while shuffling playlists and albums.", s.smartShuffle, Player::setSmartShuffle) }
         item { HorizontalDivider(Modifier.padding(horizontal = 24.dp)); SectionTitle("Content and privacy") }
         item { SettingsToggle("Hide explicit songs", "Filter explicitly marked music from supported browse, search and library views.", s.hideExplicit) { v -> Stores.settings.update { it.copy(hideExplicit = v) } } }
         item { SettingsToggle("Use account for browsing", "Use your signed-in account for supported browse requests.", s.useLoginForBrowse) { v -> YouTube.useLoginForBrowse = v; Stores.settings.update { it.copy(useLoginForBrowse = v) } } }

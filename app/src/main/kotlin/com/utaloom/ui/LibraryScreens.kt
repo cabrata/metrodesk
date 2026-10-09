@@ -125,7 +125,7 @@ private fun SongsHeader(title: String, songs: List<Song>) {
         Text("${songs.size} songs • ${formatTime(songs.sumOf { (it.duration ?: 0) * 1000L })}", color = MaterialTheme.colorScheme.onSurfaceVariant)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Button({ Player.playQueue(songs, title = title) }, enabled = songs.isNotEmpty()) { Icon(Icons.Default.PlayArrow, null); Text("Play") }
-            OutlinedButton({ Player.playQueue(songs.shuffled(), title = title) }, enabled = songs.isNotEmpty()) { Icon(Icons.Default.Shuffle, null); Text("Shuffle") }
+            OutlinedButton({ Player.playQueue(songs, songs.indices.random(), title, shuffle = true) }, enabled = songs.isNotEmpty()) { Icon(Icons.Default.Shuffle, null); Text("Shuffle") }
             OutlinedButton({ Player.addToQueue(songs) }, enabled = songs.isNotEmpty()) { Text("Add to queue") }
             IconButton({ Downloads.download(songs) }, enabled = songs.isNotEmpty()) { Icon(Icons.Default.Download, "Download visible songs") }
         }

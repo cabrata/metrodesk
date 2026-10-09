@@ -128,7 +128,7 @@ fun UtaloomApp(vlcError: String? = null) {
                         }
                         if (!compact) AnimatedVisibility(panel != Panel.NONE) {
                             Box(Modifier.width(panelWidth).fillMaxHeight().padding(top = 8.dp, end = 8.dp).clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceContainerLow)) {
-                                if (panel == Panel.QUEUE) QueuePanel() else LyricsPanel()
+                                if (panel == Panel.QUEUE) QueuePanel(compact = true) else LyricsPanel()
                             }
                         }
                     }

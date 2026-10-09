@@ -68,6 +68,7 @@ data class Settings(
     val audioQuality: String = "AUTO", // AUTO | HIGH | LOW
     val volume: Int = 80,
     val normalizeVolume: Boolean = true,
+    val smartShuffle: Boolean = false,
     val cookie: String? = null,
     val visitorData: String? = null,
     val dataSyncId: String? = null,

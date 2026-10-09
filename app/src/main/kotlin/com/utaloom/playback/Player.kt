@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.pow
@@ -78,6 +79,9 @@ object Player {
     private var events: AudioEngine.Listener? = null
     private var sleepJob: Job? = null
     private var originalOrder: List<Song>? = null
+    private var smartShuffleJob: Job? = null
+    private var smartShuffleRevision = 0L
+    @Volatile private var smartShuffleIds = emptySet<String>()
     @Volatile private var gain = 1.0
     @Volatile private var pendingSeek: Long? = null
     @Volatile private var playWhenReady = true
@@ -108,6 +112,7 @@ object Player {
         val old: AudioEngine?
         synchronized(this) {
             persist()
+            cancelSmartShuffle()
             cancelLoading()
             sleepJob?.cancel(); persistJob?.cancel()
             old = mp
@@ -128,13 +133,16 @@ object Player {
 
     // region queue
 
-    @Synchronized fun playQueue(songs: List<Song>, startIndex: Int = 0, title: String? = null, radio: WatchEndpoint? = null, fromRemote: Boolean = false, play: Boolean = true, startAt: Long = 0) {
+    @Synchronized fun playQueue(songs: List<Song>, startIndex: Int = 0, title: String? = null, radio: WatchEndpoint? = null, fromRemote: Boolean = false, play: Boolean = true, startAt: Long = 0, shuffle: Boolean = false) {
         if (songs.isEmpty() || remoteControlled && !fromRemote) return
+        cancelSmartShuffle()
+        smartShuffleIds = emptySet()
         originalOrder = null
         radioEndpoint = radio
         radioContinuation = null
         _state.update { it.copy(queue = songs, index = startIndex.coerceIn(songs.indices), queueTitle = title, shuffle = false) }
         load(play = play, notify = !fromRemote, startAt = startAt)
+        if (shuffle && !fromRemote) toggleShuffle()
     }
 
     /** Play a single song and fill the queue with a YouTube Music radio for it. */
@@ -144,8 +152,9 @@ object Player {
         radioJob = scope.launch { extendRadio() }
     }
 
-    fun startRadio(endpoint: WatchEndpoint, title: String?) {
+    @Synchronized fun startRadio(endpoint: WatchEndpoint, title: String?) {
         if (remoteControlled) return
+        removeSmartShuffleRecommendations()
         radioJob?.cancel()
         val gen = generation.get()
         radioJob = scope.launch {
@@ -215,12 +224,19 @@ object Player {
         list to list.indexOf(cur)
     }
 
-    fun clearQueue() = mutateQueue { q, i -> listOfNotNull(q.getOrNull(i)) to 0 }
+    @Synchronized fun clearQueue() {
+        if (remoteControlled) return
+        cancelSmartShuffle()
+        mutateQueue { q, i -> listOfNotNull(q.getOrNull(i)) to 0 }
+    }
 
     /** Replace queue keeping the current song (used for Listen Together guest syncing). */
     @Synchronized fun setQueueFromRemote(songs: List<Song>, currentId: String?) {
+        cancelSmartShuffle()
+        smartShuffleIds = emptySet()
+        originalOrder = null
         val idx = songs.indexOfFirst { it.id == currentId }
-        _state.update { it.copy(queue = songs, index = if (idx >= 0) idx else it.index.coerceAtMost(songs.lastIndex)) }
+        _state.update { it.copy(queue = songs, index = if (idx >= 0) idx else it.index.coerceAtMost(songs.lastIndex), shuffle = false) }
     }
 
     @Synchronized private fun mutateQueue(f: (List<Song>, Int) -> Pair<List<Song>, Int>) {
@@ -243,13 +259,82 @@ object Player {
             originalOrder = s.queue
             val rest = s.queue.filterIndexed { i, _ -> i != s.index }.shuffled()
             _state.update { it.copy(queue = listOf(cur) + rest, index = 0, shuffle = true) }
+            startSmartShuffle()
         } else {
+            removeSmartShuffleRecommendations()
+            val queue = _state.value.queue
             val orig = originalOrder ?: s.queue
-            val merged = orig.filter { o -> s.queue.any { it.id == o.id } } + s.queue.filter { q -> orig.none { it.id == q.id } }
+            val merged = orig.filter { o -> queue.any { it.id == o.id } } + queue.filter { q -> orig.none { it.id == q.id } }
             _state.update { it.copy(queue = merged, index = merged.indexOfFirst { m -> m.id == cur.id }.coerceAtLeast(0), shuffle = false) }
             originalOrder = null
         }
         notifyQueue()
+    }
+
+    @Synchronized fun setSmartShuffle(enabled: Boolean) {
+        Stores.settings.update { it.copy(smartShuffle = enabled) }
+        if (remoteControlled) return
+        if (enabled) startSmartShuffle() else removeSmartShuffleRecommendations()
+    }
+
+    private fun cancelSmartShuffle() {
+        smartShuffleRevision++
+        smartShuffleJob?.cancel()
+        smartShuffleJob = null
+    }
+
+    private fun removeSmartShuffleRecommendations() {
+        cancelSmartShuffle()
+        if (smartShuffleIds.isEmpty()) return
+        val s = _state.value
+        val queue = s.queue.filter { it.id !in smartShuffleIds || it.id == s.current?.id }
+        _state.update { it.copy(queue = queue, index = queue.indexOfFirst { song -> song.id == s.current?.id }) }
+        smartShuffleIds = smartShuffleIds.intersect(setOfNotNull(s.current?.id))
+        notifyQueue()
+    }
+
+    // ponytail: one bounded radio batch per finite queue, paginate only if continuous discovery is needed.
+    private fun startSmartShuffle() {
+        val s = _state.value
+        if (remoteControlled || !Stores.settings.value.smartShuffle || !s.shuffle || radioEndpoint != null ||
+            smartShuffleJob?.isActive == true || s.queue.any { it.id in smartShuffleIds }
+        ) return
+        val seed = s.current ?: return
+        val revision = smartShuffleRevision
+        val count = (s.queue.size / 3).coerceIn(1, 30)
+        smartShuffleJob = scope.launch {
+            try {
+                val result = withTimeout(30_000) {
+                    YouTube.next(WatchEndpoint(videoId = seed.id, playlistId = "RDAMVM${seed.id}")).getOrThrow()
+                }
+                currentCoroutineContext().ensureActive()
+                synchronized(Player) {
+                    val live = _state.value
+                    if (revision != smartShuffleRevision || remoteControlled || !live.shuffle ||
+                        !Stores.settings.value.smartShuffle || live.current == null || radioEndpoint != null
+                    ) return@synchronized
+                    val have = live.queue.map { it.id }.toSet()
+                    val additions = result.items.map { it.toSong() }
+                        .filter { it.id !in have && (!Stores.settings.value.hideExplicit || !it.explicit) }
+                        .distinctBy { it.id }.take(count)
+                    if (additions.isEmpty()) return@synchronized
+                    val queue = live.queue.take(live.index + 1).toMutableList()
+                    val recommendations = additions.iterator()
+                    live.queue.drop(live.index + 1).forEachIndexed { i, song ->
+                        queue += song
+                        if ((i + 1) % 3 == 0 && recommendations.hasNext()) queue += recommendations.next()
+                    }
+                    recommendations.forEachRemaining { queue += it }
+                    smartShuffleIds = additions.map { it.id }.toSet()
+                    _state.update { it.copy(queue = queue) }
+                    notifyQueue()
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                System.err.println("Smart shuffle unavailable, keeping normal shuffle: ${e.message}")
+            }
+        }
     }
 
     fun cycleRepeat() {
@@ -338,6 +423,9 @@ object Player {
 
     @Synchronized fun stop(fromRemote: Boolean = false) {
         if (remoteControlled && !fromRemote) return
+        cancelSmartShuffle()
+        smartShuffleIds = emptySet()
+        originalOrder = null
         cancelLoading()
         sleepJob?.cancel()
         playWhenReady = false
@@ -541,7 +629,8 @@ object Player {
 
     private fun persist() {
         val s = _state.value
-        Stores.queue.update { PersistedQueue(s.queue.take(500), s.index.coerceAtLeast(0), s.positionMs, s.queueTitle) }
+        val songs = s.queue.filter { it.id !in smartShuffleIds || it.id == s.current?.id }.take(500)
+        Stores.queue.update { PersistedQueue(songs, songs.indexOfFirst { it.id == s.current?.id }.coerceAtLeast(0), s.positionMs, s.queueTitle) }
     }
 
     private suspend fun positionPersistLoop() {

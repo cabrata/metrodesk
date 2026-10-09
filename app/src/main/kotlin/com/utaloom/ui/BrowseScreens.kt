@@ -267,7 +267,7 @@ fun CollectionHeader(
                 Button(onClick = { Player.playQueue(songs, title = title) }, enabled = songs.isNotEmpty()) {
                     Icon(Icons.Default.PlayArrow, null); Spacer(Modifier.width(6.dp)); Text("Play")
                 }
-                FilledTonalIconButton({ Player.playQueue(songs.shuffled(), title = title) }, enabled = songs.isNotEmpty()) { Icon(Icons.Default.Shuffle, "Shuffle") }
+                FilledTonalIconButton({ Player.playQueue(songs, songs.indices.random(), title, shuffle = true) }, enabled = songs.isNotEmpty()) { Icon(Icons.Default.Shuffle, "Shuffle") }
                 if (onSave != null) IconButton(onSave) { Icon(if (saved) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Save to library", tint = if (saved) MaterialTheme.colorScheme.primary else LocalContentColor.current) }
                 IconButton({ Downloads.download(songs) }, enabled = songs.isNotEmpty()) { Icon(Icons.Default.Download, "Download all") }
                 extra?.invoke()
