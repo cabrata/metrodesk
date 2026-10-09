@@ -37,13 +37,32 @@ class NotificationControlsTest {
     }
     private fun find(node: AccessibilityNodeInfo?, label: String): AccessibilityNodeInfo? {
         if (node == null) return null
-        if (node.contentDescription?.toString()?.contains(label, ignoreCase = true) == true && node.isClickable) return node
+        val description = node.contentDescription?.toString()?.trim()
+        val labels = when (label) { "Next" -> listOf("Next", "Next track", "Skip to next"); "Previous" -> listOf("Previous", "Previous track", "Skip to previous"); else -> listOf(label) }
+        if (node.packageName?.toString() == "com.android.systemui" && labels.any { description.equals(it, ignoreCase = true) } && node.isClickable) return node
         for (index in 0 until node.childCount) find(node.getChild(index), label)?.let { return it }
         return null
     }
     private fun shadeButton(label: String) {
         await("shade $label") { find(instrumentation.uiAutomation.rootInActiveWindow, label)?.isEnabled == true }
-        assertTrue("System UI $label click", find(instrumentation.uiAutomation.rootInActiveWindow, label)!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+        val button = find(instrumentation.uiAutomation.rootInActiveWindow, label)!!
+        android.util.Log.i("NotificationControls", "Click $label: ${button.viewIdResourceName} '${button.contentDescription}'")
+        assertTrue("System UI $label click", button.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+    }
+    private fun capture(stage: String) {
+        val directory = context.getExternalFilesDir(null)
+        instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+            File(directory, "notification-$stage.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+        }
+        val tree = StringBuilder("${Player.state.value}\n")
+        fun dump(node: AccessibilityNodeInfo?) {
+            if (node == null) return
+            tree.append("${node.viewIdResourceName} desc='${node.contentDescription}' text='${node.text}' clickable=${node.isClickable} enabled=${node.isEnabled}\n")
+            for (index in 0 until node.childCount) dump(node.getChild(index))
+        }
+        dump(instrumentation.uiAutomation.rootInActiveWindow)
+        File(directory, "notification-$stage.txt").writeText(tree.toString())
     }
 
     @Test fun notificationShadeControlsAndSharedQueue() {
@@ -79,8 +98,12 @@ class NotificationControlsTest {
             val manager = context.getSystemService(NotificationManager::class.java)
             await("native notification") { manager.activeNotifications.any { it.notification.smallIcon?.resId == R.drawable.ic_notification } }
             assertTrue(instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS))
+            await("shade ready") { find(instrumentation.uiAutomation.rootInActiveWindow, "Pause")?.isEnabled == true }
+            capture("before-controls")
             shadeButton("Pause")
             await("shade pause") { !Player.state.value.isPlaying }
+            await("paused shade ready") { find(instrumentation.uiAutomation.rootInActiveWindow, "Play")?.isEnabled == true }
+            capture("paused")
             shadeButton("Play")
             await("shade play") { Player.state.value.isPlaying }
             shadeButton("Next")
@@ -90,10 +113,7 @@ class NotificationControlsTest {
             await("shade previous") { Player.state.value.current?.id == songs[1].id && Player.state.value.isPlaying }
             main { controls.seekTo(10_000) }
             await("session seek") { Player.state.value.positionMs >= 9900 }
-            instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
-                File(context.getExternalFilesDir(null), "notification-controls.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
-                bitmap.recycle()
-            }
+            capture("controls")
             main { Player.remoteControlled = true }
             await("guest commands disabled") { main {
                 ready = !controls.isCommandAvailable(Media3Player.COMMAND_PLAY_PAUSE) && !controls.isCommandAvailable(Media3Player.COMMAND_SEEK_TO_NEXT)
@@ -108,6 +128,9 @@ class NotificationControlsTest {
             await("repeat all next") { main { ready = controls.isCommandAvailable(Media3Player.COMMAND_SEEK_TO_NEXT) && controls.nextMediaItemIndex == 0 }; ready }
             main { controls.seekToNext() }
             await("repeat wraps shared queue") { Player.state.value.current?.id == songs[0].id }
+        } catch (failure: Throwable) {
+            runCatching { capture("failure") }
+            throw failure
         } finally {
             main { controller?.release(); Player.remoteControlled = false; Player.stop() }
             songs.forEach { Library.setDownloaded(it.id, null) }
