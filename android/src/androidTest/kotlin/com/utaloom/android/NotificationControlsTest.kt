@@ -104,7 +104,7 @@ class NotificationControlsTest {
             assertEquals(songs[1].id, Player.state.value.current?.id)
             main { Player.remoteControlled = false; Player.skipTo(2) }
             await("queue end") { main { ready = controls.currentMediaItemIndex == 2 && !controls.isCommandAvailable(Media3Player.COMMAND_SEEK_TO_NEXT) }; ready }
-            main { assertEquals(C.INDEX_UNSET, controls.nextMediaItemIndex); Player.cycleRepeat(); Player.cycleRepeat() }
+            main { assertEquals(C.INDEX_UNSET, controls.nextMediaItemIndex); Player.cycleRepeat() }
             await("repeat all next") { main { ready = controls.isCommandAvailable(Media3Player.COMMAND_SEEK_TO_NEXT) && controls.nextMediaItemIndex == 0 }; ready }
             main { controls.seekToNext() }
             await("repeat wraps shared queue") { Player.state.value.current?.id == songs[0].id }
