@@ -2,6 +2,8 @@ package com.utaloom.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -10,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
@@ -74,7 +77,7 @@ private suspend fun signInWithCookie(cookie: String) {
 
 @Composable
 private fun SettingsToggle(title: String, description: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
             Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -86,16 +89,29 @@ private fun SettingsToggle(title: String, description: String, checked: Boolean,
 @Composable
 private fun SettingsChoice(title: String, description: String, selected: String, options: List<Pair<String, String>>, onChange: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    @Composable
+    fun Details(modifier: Modifier) {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
             Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+    @Composable
+    fun Choice() {
         Box {
             OutlinedButton({ open = true }) { Text(options.firstOrNull { it.first == selected }?.second ?: selected); Icon(Icons.Default.ArrowDropDown, null) }
             DropdownMenu(open, { open = false }) {
                 options.forEach { (value, label) -> DropdownMenuItem({ Text(label) }, { onChange(value); open = false }) }
             }
+        }
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+        if (maxWidth < 500.dp * LocalDensity.current.fontScale) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Details(Modifier.fillMaxWidth())
+            Choice()
+        } else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            Details(Modifier.weight(1f))
+            Choice()
         }
     }
 }
@@ -124,12 +140,12 @@ fun SettingsScreen(isMobile: Boolean = System.getProperty("java.vm.name") == "Da
                 if (s.cookie != null) TextButton({ confirm = "signout" }) { Text("Sign out") }
             }
             BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
-                if (maxWidth < 500.dp) Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (maxWidth < 500.dp * LocalDensity.current.fontScale) Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         if (s.accountAvatar != null) Thumb(s.accountAvatar, 56.dp)
                         AccountDetails(Modifier.weight(1f))
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { AccountActions() }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { AccountActions() }
                 } else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     if (s.accountAvatar != null) Thumb(s.accountAvatar, 56.dp)
                     AccountDetails(Modifier.weight(1f))
@@ -154,11 +170,20 @@ fun SettingsScreen(isMobile: Boolean = System.getProperty("java.vm.name") == "Da
         order.forEachIndexed { i, p ->
             item(key = "lyrics-$p") {
                 fun move(to: Int) = Stores.settings.update { it.copy(lyricsOrder = order.toMutableList().apply { add(to, removeAt(i)) }) }
-                Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(p, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                @Composable
+                fun Controls() {
                     IconButton({ move(i - 1) }, enabled = i > 0) { Icon(Icons.Default.ArrowUpward, "Move $p up") }
                     IconButton({ move(i + 1) }, enabled = i < order.lastIndex) { Icon(Icons.Default.ArrowDownward, "Move $p down") }
                     Switch(p !in s.lyricsDisabled, { on -> Stores.settings.update { it.copy(lyricsDisabled = if (on) it.lyricsDisabled - p else it.lyricsDisabled + p) } })
+                }
+                BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+                    if (maxWidth < 360.dp * LocalDensity.current.fontScale) Column {
+                        Text(p, style = MaterialTheme.typography.titleMedium)
+                        Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) { Controls() }
+                    } else Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(p, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        Controls()
+                    }
                 }
             }
         }
@@ -187,7 +212,7 @@ fun SettingsScreen(isMobile: Boolean = System.getProperty("java.vm.name") == "Da
     confirm?.let { action ->
         val title = when (action) { "signout" -> "Sign out?"; "search" -> "Clear search history?"; else -> "Clear listening history?" }
         val message = when (action) { "signout" -> "Remove your saved cookie and account details from this device. Local playlists, likes and downloads are kept."; "search" -> "Remove all locally saved searches?"; else -> "Remove local listening history and play counts? Liked songs and playlists are kept." }
-        AlertDialog(onDismissRequest = { confirm = null }, title = { Text(title) }, text = { Text(message) },
+        AlertDialog(onDismissRequest = { confirm = null }, title = { Text(title) }, text = { Text(message, Modifier.verticalScroll(rememberScrollState())) },
             confirmButton = { TextButton({
                 when (action) {
                     "signout" -> {
@@ -221,12 +246,10 @@ private fun ContentLocaleFields(language: String, country: String) {
             }, enabled = valid && (lang.trim() != language || region.trim().uppercase(Locale.ROOT) != country)) { Text("Apply") }
         }
         BoxWithConstraints {
-            if (maxWidth < 500.dp) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (maxWidth < 500.dp * LocalDensity.current.fontScale) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(lang, { lang = it.take(35) }, Modifier.fillMaxWidth(), label = { Text("Language (en, id, pt-BR)") }, singleLine = true)
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(region, { region = it.take(2) }, Modifier.weight(1f), label = { Text("Country (US, ID)") }, singleLine = true)
-                    ApplyLocale()
-                }
+                OutlinedTextField(region, { region = it.take(2) }, Modifier.fillMaxWidth(), label = { Text("Country (US, ID)") }, singleLine = true)
+                ApplyLocale()
             } else Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(lang, { lang = it.take(35) }, Modifier.weight(1f), label = { Text("Language (en, id, pt-BR)") }, singleLine = true)
                 OutlinedTextField(region, { region = it.take(2) }, Modifier.width(150.dp), label = { Text("Country (US, ID)") }, singleLine = true)
@@ -243,9 +266,18 @@ private fun TogetherServerField(url: String) {
     val error = serverUrlError(value.trim())
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Server URL", style = MaterialTheme.typography.titleMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(value, { value = it }, Modifier.weight(1f), label = { Text("WebSocket URL") }, singleLine = true, isError = error != null)
+        @Composable
+        fun ApplyServer() {
             OutlinedButton({ Stores.settings.update { it.copy(ltServerUrl = value.trim()) } }, enabled = error == null && value.trim() != url) { Text("Apply") }
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            if (maxWidth < 500.dp * LocalDensity.current.fontScale) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value, { value = it }, Modifier.fillMaxWidth(), label = { Text("WebSocket URL") }, singleLine = true, isError = error != null)
+                ApplyServer()
+            } else Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(value, { value = it }, Modifier.weight(1f), label = { Text("WebSocket URL") }, singleLine = true, isError = error != null)
+                ApplyServer()
+            }
         }
         Text(error ?: if (value.trim().startsWith("ws://")) "Unencrypted connection. Prefer wss:// outside a trusted local network." else "Used when connecting to a room. Changing it does not disconnect an active room.",
             style = MaterialTheme.typography.bodySmall, color = if (error == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
@@ -260,11 +292,11 @@ private fun CookieLoginDialog(onDismiss: () -> Unit) {
     val validation = loginCookieError(cookie)
     val scope = rememberCoroutineScope()
     AlertDialog(onDismissRequest = { if (!busy) { cookie = ""; onDismiss() } }, title = { Text("Sign in with a cookie") }, text = {
-        Column(Modifier.width(540.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.widthIn(max = 540.dp).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("In your browser, sign in to music.youtube.com, open Developer Tools → Network, and copy the Cookie header from a request to that site. Paste only the header value, not 'Cookie:'.")
             Text("Cookies grant access to your account. Never share them. Utaloom keeps the validated cookie in its local settings file with restricted access; it is not encrypted.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            OutlinedTextField(cookie, { cookie = it; error = null }, Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 180.dp), enabled = !busy,
-                label = { Text("Cookie header value") }, visualTransformation = PasswordVisualTransformation(), singleLine = false,
+            OutlinedTextField(cookie, { cookie = it; error = null }, Modifier.fillMaxWidth(), enabled = !busy,
+                label = { Text("Cookie header value") }, visualTransformation = PasswordVisualTransformation(), minLines = 2, maxLines = 4,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), isError = cookie.isNotEmpty() && validation != null,
                 supportingText = { Text(if (busy) "Checking your account…" else validation ?: "${cookie.toByteArray(Charsets.UTF_8).size}/16384 bytes") })
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -293,11 +325,15 @@ private fun UpdateRow() {
     var busy by remember { mutableStateOf(false) }
     HorizontalDivider(Modifier.padding(horizontal = 24.dp))
     SectionTitle("About")
-    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    @Composable
+    fun Details(modifier: Modifier) {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Utaloom ${com.utaloom.platform.Updates.current}", style = MaterialTheme.typography.titleMedium)
             Text(status ?: "Updates come from GitHub releases.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+    @Composable
+    fun Actions() {
         release?.let { r -> Button({ com.utaloom.platform.Updates.open(r.html_url) }) { Text("Download ${r.tag_name}") } }
         OutlinedButton({
             busy = true
@@ -313,6 +349,15 @@ private fun UpdateRow() {
                 busy = false
             }
         }, enabled = !busy) { Text(if (busy) "Checking…" else "Check for updates") }
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+        if (maxWidth < 560.dp * LocalDensity.current.fontScale) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Details(Modifier.fillMaxWidth())
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { Actions() }
+        } else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Details(Modifier.weight(1f))
+            Actions()
+        }
     }
 }
 

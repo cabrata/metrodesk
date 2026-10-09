@@ -46,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -66,7 +67,7 @@ fun TogetherScreen() {
         item {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Icon(Icons.Default.Groups, null, Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
-                Text("Listen Together", style = MaterialTheme.typography.headlineMedium)
+                Text("Listen Together", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium)
             }
             ConnectionLine(st, settings.ltServerUrl)
         }
@@ -114,21 +115,36 @@ private fun JoinCard(st: TogetherState, savedName: String) {
     var code by remember { mutableStateOf("") }
     val busy = st.waitingApproval || st.connection == Connection.CONNECTING
     val validName = name.isNotBlank() && name.trim().length <= 32
-    Card(Modifier.widthIn(max = 560.dp)) {
+    Card(Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedTextField(name, { name = it.take(32) }, label = { Text("Your name") }, singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = !busy)
             Button({ ListenTogether.createRoom(name.trim()) }, enabled = validName && !busy, modifier = Modifier.fillMaxWidth()) { Text("Create room") }
             Text("or join an existing one", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            @Composable
+            fun CodeField(modifier: Modifier) {
                 OutlinedTextField(
                     code, { v -> code = v.filter { it.isLetterOrDigit() }.uppercase().take(12) },
-                    label = { Text("Room code") }, singleLine = true, modifier = Modifier.weight(1f), enabled = !busy,
+                    label = { Text("Room code") }, singleLine = true, modifier = modifier, enabled = !busy,
                 )
+            }
+            @Composable
+            fun JoinButton() {
                 OutlinedButton({ ListenTogether.joinRoom(code, name.trim()) }, enabled = validName && code.length >= 4 && !busy) { Text("Join") }
             }
-            if (st.waitingApproval) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                Text("Waiting for the host to approve…", Modifier.weight(1f))
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                if (maxWidth < 420.dp * LocalDensity.current.fontScale) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CodeField(Modifier.fillMaxWidth())
+                    JoinButton()
+                } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CodeField(Modifier.weight(1f))
+                    JoinButton()
+                }
+            }
+            if (st.waitingApproval) Column {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Text("Waiting for the host to approve…", Modifier.weight(1f))
+                }
                 TextButton(ListenTogether::leaveRoom) { Text("Cancel") }
             }
         }
@@ -138,21 +154,21 @@ private fun JoinCard(st: TogetherState, savedName: String) {
 @Composable
 private fun RoomCard(st: TogetherState) {
     val clipboard = LocalClipboardManager.current
-    Card(Modifier.widthIn(max = 560.dp)) {
+    Card(Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(if (st.role == Role.HOST) "You are hosting" else "You are listening along", style = MaterialTheme.typography.titleMedium)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(st.roomCode.orEmpty(), style = MaterialTheme.typography.headlineMedium, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                SelectionContainer { Text(st.roomCode.orEmpty(), style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Monospace) }
                 IconButton({ clipboard.setText(AnnotatedString(st.roomCode.orEmpty())) }) { Icon(Icons.Default.ContentCopy, "Copy room code") }
             }
             if (st.waitingForBuffer.isNotEmpty()) {
                 val names = st.waitingForBuffer.map { id -> st.users.firstOrNull { it.id == id }?.name ?: id }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                    Text("Waiting for ${names.joinToString()} to buffer", style = MaterialTheme.typography.bodySmall)
+                    Text("Waiting for ${names.joinToString()} to buffer", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (st.role == Role.GUEST) OutlinedButton(ListenTogether::requestSync) { Text("Resync") }
                 Button(ListenTogether::leaveRoom) { Text("Leave room") }
             }
@@ -163,7 +179,7 @@ private fun RoomCard(st: TogetherState) {
 @Composable
 private fun JoinRequests(st: TogetherState) = Section("Join requests") {
     st.joinRequests.forEach { r ->
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Person, null)
             Text(r.username, Modifier.weight(1f).padding(start = 12.dp))
             IconButton({ ListenTogether.approve(r.userId) }) { Icon(Icons.Default.Check, "Approve ${r.username}", tint = MaterialTheme.colorScheme.primary) }
@@ -194,7 +210,7 @@ private fun Suggestions(st: TogetherState) = Section("Suggestions") {
 @Composable
 private fun Members(st: TogetherState) = Section("Members (${st.users.size})") {
     st.users.sortedByDescending { it.isHost }.forEach { u ->
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Icon(if (u.isHost) Icons.Default.Star else Icons.Default.Person, null, tint = if (u.isHost) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             Column(Modifier.weight(1f).padding(start = 12.dp)) {
                 Text(u.name + if (u.id == st.userId) " (you)" else "", fontWeight = if (u.isHost) FontWeight.SemiBold else FontWeight.Normal)
@@ -219,7 +235,7 @@ private fun Logs(logs: List<String>) {
             LaunchedEffect(logs.size) { if (logs.isNotEmpty()) list.scrollToItem(logs.lastIndex) }
             Card(Modifier.fillMaxWidth()) {
                 SelectionContainer {
-                    LazyColumn(Modifier.heightIn(max = 280.dp).padding(12.dp), state = list) {
+                    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 280.dp).padding(12.dp), state = list) {
                         items(logs) { Text(it, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace) }
                     }
                 }

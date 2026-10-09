@@ -27,7 +27,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.utaloom.data.Library
 import com.utaloom.data.SavedRef
@@ -99,12 +101,15 @@ fun ExploreScreen() {
         if (page.moodAndGenres.isNotEmpty()) {
             item { SectionTitle("Moods & genres") }
             item {
-                FlowRow(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    page.moodAndGenres.forEach { m ->
-                        Surface(onClick = { Nav.go(Screen.Browse(m.title, m.endpoint)) }, shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                            Row(Modifier.width(200.dp).height(52.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.width(6.dp).fillMaxHeight().background(Color(m.stripeColor)))
-                                Text(m.title, Modifier.padding(16.dp), fontWeight = FontWeight.Medium)
+                BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+                    val tileWidth = if (maxWidth < 410.dp * LocalDensity.current.fontScale) maxWidth else 200.dp
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        page.moodAndGenres.forEach { m ->
+                            Surface(onClick = { Nav.go(Screen.Browse(m.title, m.endpoint)) }, shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                                Row(Modifier.width(tileWidth).heightIn(min = 52.dp).height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.width(6.dp).fillMaxHeight().background(Color(m.stripeColor)))
+                                    Text(m.title, Modifier.padding(16.dp), fontWeight = FontWeight.Medium)
+                                }
                             }
                         }
                     }
@@ -149,18 +154,20 @@ fun SearchScreen(query: String) {
         }
         loading = false
     }
-    Column(Modifier.fillMaxSize()) {
-        Text("Results for \"$query\"", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(start = 24.dp, top = 24.dp, bottom = 12.dp))
-        LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(SearchFilters.keys.toList()) { f -> FilterChip(selected = f == filter, onClick = { filter = f }, label = { Text(f) }) }
+    LazyColumn(Modifier.fillMaxSize(), state, contentPadding = PaddingValues(bottom = 24.dp)) {
+        item { Text("Results for \"$query\"", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) }
+        item {
+            LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(SearchFilters.keys.toList()) { f -> FilterChip(selected = f == filter, onClick = { filter = f }, label = { Text(f) }) }
+            }
         }
         when {
-            loading -> Loading()
-            error != null -> ErrorBox(error!!)
+            loading -> item { Loading(Modifier.fillMaxWidth().height(80.dp)) }
+            error != null -> item { Text(error!!, Modifier.padding(24.dp), color = MaterialTheme.colorScheme.error) }
             filter == "All" -> {
                 val summaries = all?.summaries.orEmpty()
-                if (summaries.isEmpty()) EmptyBox("No results", Icons.Default.Search)
-                else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
+                if (summaries.isEmpty()) item { Text("No results", Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                else {
                     summaries.forEach { summary ->
                         if (summary.items.all { it is SongItem }) {
                             item { SectionTitle(summary.title) }
@@ -174,8 +181,8 @@ fun SearchScreen(query: String) {
             }
             else -> {
                 val visible = list.filterExplicit(settings.hideExplicit)
-                if (visible.isEmpty()) EmptyBox("No results")
-                else LazyColumn(Modifier.weight(1f), state, contentPadding = PaddingValues(vertical = 12.dp)) {
+                if (visible.isEmpty()) item { Text("No results", Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                else {
                     items(visible) { ItemRow(it) }
                     if (continuation != null) item {
                         Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
@@ -206,8 +213,8 @@ fun ItemRow(item: YTItem, songs: List<Song>? = null, title: String? = null) {
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Thumb(item.thumbnail, 56.dp, if (item is ArtistItem) CircleShape else RoundedCornerShape(8.dp))
             Column(Modifier.weight(1f)) {
-                Text(item.title, maxLines = 1, style = MaterialTheme.typography.titleMedium)
-                Text(item.subtitle(), maxLines = 1, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
+                Text(item.subtitle(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Box {
                 IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "More") }
@@ -252,7 +259,7 @@ fun CollectionHeader(
     @Composable
     fun Details(modifier: Modifier) {
         Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(title, style = MaterialTheme.typography.headlineLarge, maxLines = 3)
+            Text(title, style = MaterialTheme.typography.headlineLarge, maxLines = 3, overflow = TextOverflow.Ellipsis)
             Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("${songs.size} songs • ${formatTime(songs.sumOf { (it.duration ?: 0) * 1000L })}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (!description.isNullOrBlank()) Text(description, maxLines = 3, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -268,8 +275,9 @@ fun CollectionHeader(
         }
     }
     BoxWithConstraints(Modifier.fillMaxWidth().padding(24.dp)) {
-        if (maxWidth < 552.dp) Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            Thumb(thumbnail, 196.dp, RoundedCornerShape(16.dp))
+        val artSize = minOf(196.dp, maxWidth * 0.6f)
+        if (maxWidth < 552.dp * LocalDensity.current.fontScale) Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Thumb(thumbnail, artSize, RoundedCornerShape(16.dp))
             Details(Modifier.fillMaxWidth())
         } else Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
             Thumb(thumbnail, 196.dp, RoundedCornerShape(16.dp))
@@ -345,8 +353,9 @@ fun ArtistScreen(id: String) {
                 }
             }
             BoxWithConstraints(Modifier.fillMaxWidth().padding(24.dp)) {
-                if (maxWidth < 552.dp) Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                    Thumb(a.artist.thumbnail, 200.dp, CircleShape)
+                val artSize = minOf(200.dp, maxWidth * 0.6f)
+                if (maxWidth < 552.dp * LocalDensity.current.fontScale) Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Thumb(a.artist.thumbnail, artSize, CircleShape)
                     ArtistDetails(Modifier.fillMaxWidth())
                 } else Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
                     Thumb(a.artist.thumbnail, 200.dp, CircleShape)
