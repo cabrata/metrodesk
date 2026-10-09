@@ -13,8 +13,15 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import com.utaloom.android.UtaloomApplication
+import com.utaloom.data.Song
 import okhttp3.OkHttpClient
 import java.util.concurrent.CopyOnWriteArrayList
+
+internal fun Song.toMediaItem(): MediaItem = MediaItem.Builder().setMediaId(id).setMediaMetadata(
+    MediaMetadata.Builder().setTitle(title).setArtist(artistText).setAlbumTitle(album)
+        .setArtworkUri(thumbnail?.let(android.net.Uri::parse)).setDurationMs(duration?.takeIf { it > 0 }?.toLong()?.times(1000))
+        .setIsPlayable(true).setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC).build(),
+).build()
 
 fun createAudioEngine(): AudioEngine {
     check(Looper.myLooper() == Looper.getMainLooper()) { "Initialize Android playback on the main thread" }
@@ -93,9 +100,7 @@ class AndroidAudioEngine : AudioEngine {
 
     override fun load(url: String, headers: Map<String, String>, startPaused: Boolean): Boolean = runCatching {
         val song = Player.state.value.current
-        val metadata = MediaMetadata.Builder().setTitle(song?.title).setArtist(song?.artistText)
-            .setAlbumTitle(song?.album).setArtworkUri(song?.thumbnail?.let(android.net.Uri::parse)).build()
-        val item = MediaItem.Builder().setMediaId(song?.id ?: url).setUri(url).setMediaMetadata(metadata).build()
+        val item = (song?.toMediaItem()?.buildUpon() ?: MediaItem.Builder().setMediaId(url)).setUri(url).build()
         val data = DefaultDataSource.Factory(UtaloomApplication.instance, OkHttpDataSource.Factory(http).setDefaultRequestProperties(headers))
         time = 0; isSeekable = false
         exo.setMediaSource(ProgressiveMediaSource.Factory(data).createMediaSource(item))
