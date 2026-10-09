@@ -5,6 +5,9 @@ Built with Kotlin and Compose Multiplatform (Material 3), with libVLC on desktop
 
 Both platforms compile the same Utaloom UI, library, extraction, lyrics and Listen Together sources. No separate Metrolist application is vendored here.
 
+[Android repository](https://github.com/cabrata/utaloom-android) · [Desktop app](https://github.com/cabrata/utaloom) · [Releases](https://github.com/cabrata/utaloom/releases) · [Report an issue](https://github.com/cabrata/utaloom/issues)
+
+
 ## Screenshots
 
 ![Full-screen player with word-synced lyrics](docs/screenshots/lyrics-fullscreen.png)
