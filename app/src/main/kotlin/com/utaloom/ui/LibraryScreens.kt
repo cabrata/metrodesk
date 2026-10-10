@@ -25,6 +25,8 @@ import com.utaloom.data.SavedRef
 import com.utaloom.data.Song
 import com.utaloom.data.Stores
 import com.utaloom.data.toSong
+import com.utaloom.data.RemoteImport
+import com.utaloom.data.importRemotePlaylist
 import com.utaloom.playback.Downloads
 import com.utaloom.playback.Player
 import com.utaloom.innertube.YouTube
@@ -161,6 +163,7 @@ fun LibraryScreen() {
     var imported by remember { mutableStateOf<LocalPlaylist?>(null) }
     var fileBusy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    var linkImport by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     @Composable
     fun LibraryActions() {
@@ -174,6 +177,7 @@ fun LibraryScreen() {
                 finally { fileBusy = false }
             }
         }, enabled = !fileBusy) { Text(if (fileBusy) "Importing…" else "Import JSON") }
+        TextButton({ linkImport = true }) { Text("Import from Spotify / YT Music") }
     }
     @Composable
     fun Header() {
@@ -231,6 +235,8 @@ fun LibraryScreen() {
         }
     }
     if (create) PlaylistNameDialog("New playlist", onDismiss = { create = false }) { Nav.go(Screen.LocalPlaylist(Library.createPlaylist(it))) }
+    if (linkImport) LinkImportDialog({ linkImport = false }) { linkImport = false; imported = it.playlist
+        if (it.missing.isNotEmpty()) message = "${it.missing.size} tracks had no YouTube Music match:\n" + it.missing.take(20).joinToString("\n") + if (it.missing.size > 20) "\n…" else "" }
     imported?.let { p -> AlertDialog(onDismissRequest = { imported = null }, title = { Text("Import ${p.name}?") },
         text = { Text("Create a new local playlist with ${p.songs.size} songs. Existing playlists will not be changed.") },
         confirmButton = { TextButton({ Nav.go(Screen.LocalPlaylist(Library.createPlaylist(p.name, p.songs))); imported = null }) { Text("Import") } },
@@ -466,7 +472,34 @@ private fun AddPlaylistSongsDialog(id: String, onDismiss: () -> Unit) {
         dismissButton = { TextButton(onDismiss) { Text("Cancel") } })
 }
 
+@Composable
+private fun LinkImportDialog(onDismiss: () -> Unit, onDone: (RemoteImport) -> Unit) {
+    var url by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var progress by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text("Import playlist from link") }, text = {
+        Column(Modifier.widthIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(url, { url = it }, Modifier.fillMaxWidth(), singleLine = true, enabled = !busy, label = { Text("Spotify or YouTube Music link") })
+            Text("Public playlists only. Spotify tracks are matched on YouTube Music (first ~100 tracks).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (busy) Text(progress.ifEmpty { "Loading…" })
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        }
+    }, confirmButton = { TextButton({
+        busy = true; error = null; progress = ""
+        scope.launch {
+            try { onDone(importRemotePlaylist(url) { d, t -> progress = "Matching $d / $t tracks…" }) }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { error = (e as? IllegalArgumentException)?.message ?: "Import failed. Check the link and your connection." }
+            finally { busy = false }
+        }
+    }, enabled = !busy && url.isNotBlank()) { Text(if (busy) "Importing…" else "Import") } },
+        dismissButton = { TextButton(onDismiss, enabled = !busy) { Text("Cancel") } })
+}
+
 internal fun libraryScreensSelfCheck() {
+    com.utaloom.data.playlistImportSelfCheck()
     val song = Song("abc-123", "Title", listOf("Artist"))
     val original = LocalPlaylist("example", "Playlist", listOf(song))
     check(decodePlaylist(playlistJson.encodeToString(LocalPlaylist.serializer(), original)) == original)
