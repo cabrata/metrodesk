@@ -89,7 +89,6 @@ fun UtaloomApp(vlcError: String? = null, fullscreen: Boolean, onFullscreenChange
     }
     LaunchedEffect(fullscreen) {
         if (fullscreen) {
-            fullPlayer = true
             focus.clearFocus()
             keyboard?.hide()
         }

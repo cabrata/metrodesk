@@ -69,12 +69,21 @@ class FullscreenTest {
             await("Re-enter fullscreen") { onEdt { w.placement == WindowPlacement.Fullscreen } }
             click(w, "Close player")
             await("Close player exits fullscreen") { onEdt { w.placement == WindowPlacement.Floating && w.bounds == original } }
+            await("Player overlay is closed") { onEdt { find(w, "Close player") == null } }
             onEdt { w.setSize(900, 600) }
             await("Fullscreen button at minimum window size") {
-                onEdt { find(w, "Full screen (F11)")?.accessibleComponent?.size?.let { it.width > 0 && it.height > 0 } == true }
+                onEdt {
+                    find(w, "Full screen (F11)")?.accessibleComponent?.let {
+                        it.size.width > 0 && it.size.height > 0 && w.bounds.contains(java.awt.Rectangle(it.locationOnScreen, it.size))
+                    } == true
+                }
             }
             val small = onEdt { w.bounds }
-            click(w, "Full screen (F11)")
+            val target = onEdt { checkNotNull(find(w, "Full screen (F11)")?.accessibleComponent).let { java.awt.Rectangle(it.locationOnScreen, it.size) } }
+            robot.mouseMove(target.x + target.width / 2, target.y + target.height / 2)
+            robot.mousePress(InputEvent.BUTTON1_DOWN_MASK)
+            robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK)
+            robot.waitForIdle()
             await("Enter before stopping") { onEdt { w.placement == WindowPlacement.Fullscreen } }
             Player.stop()
             await("Stopping restores window") { onEdt { w.placement == WindowPlacement.Floating && w.bounds == small } }
