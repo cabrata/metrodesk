@@ -479,6 +479,7 @@ private fun LinkImportDialog(onDismiss: () -> Unit, onDone: (RemoteImport) -> Un
     var busy by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf("") }
     var fraction by remember { mutableStateOf<Float?>(null) }
+    var job by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text("Import playlist from link") }, text = {
@@ -494,14 +495,14 @@ private fun LinkImportDialog(onDismiss: () -> Unit, onDone: (RemoteImport) -> Un
         }
     }, confirmButton = { TextButton({
         busy = true; error = null; progress = ""; fraction = null
-        scope.launch {
+        job = scope.launch {
             try { onDone(importRemotePlaylist(url) { d, t -> progress = "Matching $d / $t tracks (${d * 100 / t}%)"; fraction = d.toFloat() / t }) }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { error = (e as? IllegalArgumentException)?.message ?: "Import failed. Check the link and your connection." }
             finally { busy = false }
         }
     }, enabled = !busy && url.isNotBlank()) { Text(if (busy) "Importing…" else "Import") } },
-        dismissButton = { TextButton(onDismiss, enabled = !busy) { Text("Cancel") } })
+        dismissButton = { TextButton({ job?.cancel(); onDismiss() }) { Text("Cancel") } })
 }
 
 internal fun libraryScreensSelfCheck() {
