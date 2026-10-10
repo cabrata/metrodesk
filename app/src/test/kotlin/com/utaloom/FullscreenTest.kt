@@ -38,10 +38,12 @@ class FullscreenTest {
             await("Desktop window") { onEdt { Window.getWindows().filterIsInstance<ComposeWindow>().firstOrNull { it.isShowing }?.also { window = it } != null } }
             val w = checkNotNull(window)
             val original = onEdt { w.bounds }
+            val originalInsets = onEdt { w.insets }
+            val originalDecoration = onEdt { w.isUndecorated }
             click(w, "Full screen (F11)")
-            await("Player fullscreen") { onEdt { w.placement == WindowPlacement.Fullscreen && w.graphicsConfiguration.device.fullScreenWindow == w && find(w, "Exit full screen (Esc)") != null } }
+            await("Player fills the display") { onEdt { w.placement == WindowPlacement.Fullscreen && w.graphicsConfiguration.device.fullScreenWindow == w && w.bounds == w.graphicsConfiguration.bounds && find(w, "Exit full screen (Esc)") != null } }
             click(w, "Exit full screen (Esc)")
-            await("Button restores floating window") { onEdt { w.placement == WindowPlacement.Floating && w.bounds == original } }
+            await("Button restores floating window and decorations") { onEdt { w.placement == WindowPlacement.Floating && w.bounds == original && w.insets == originalInsets && w.isUndecorated == originalDecoration && w.graphicsConfiguration.device.fullScreenWindow != w } }
             val robot = Robot()
             fun key(code: Int) {
                 onEdt { w.toFront(); w.requestFocus() }
