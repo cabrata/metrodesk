@@ -478,19 +478,24 @@ private fun LinkImportDialog(onDismiss: () -> Unit, onDone: (RemoteImport) -> Un
     var url by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf("") }
+    var fraction by remember { mutableStateOf<Float?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text("Import playlist from link") }, text = {
         Column(Modifier.widthIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(url, { url = it }, Modifier.fillMaxWidth(), singleLine = true, enabled = !busy, label = { Text("Spotify or YouTube Music link") })
             Text("Public playlists only. Spotify tracks are matched on YouTube Music, so large playlists take a while.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (busy) Text(progress.ifEmpty { "Loading…" })
+            if (busy) {
+                fraction?.let { f -> LinearProgressIndicator(progress = { f }, modifier = Modifier.fillMaxWidth()) }
+                    ?: LinearProgressIndicator(Modifier.fillMaxWidth())
+                Text(progress.ifEmpty { "Loading…" }, style = MaterialTheme.typography.bodySmall)
+            }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }, confirmButton = { TextButton({
-        busy = true; error = null; progress = ""
+        busy = true; error = null; progress = ""; fraction = null
         scope.launch {
-            try { onDone(importRemotePlaylist(url) { d, t -> progress = "Matching $d / $t tracks…" }) }
+            try { onDone(importRemotePlaylist(url) { d, t -> progress = "Matching $d / $t tracks (${d * 100 / t}%)"; fraction = d.toFloat() / t }) }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { error = (e as? IllegalArgumentException)?.message ?: "Import failed. Check the link and your connection." }
             finally { busy = false }
