@@ -20,7 +20,7 @@ fun main() {
     applySession()
     val vlcError = NativeLibs.discoverVlc()
     if (vlcError == null) Player.init() else System.err.println(vlcError)
-    Runtime.getRuntime().addShutdownHook(Thread { Mpris.stop(); Player.release(); Stores.flushAll() })
+    Runtime.getRuntime().addShutdownHook(Thread { PlaylistImports.cancel(); Mpris.stop(); Player.release(); Stores.flushAll() })
     application {
         var visible by remember { mutableStateOf(true) }
         val settings by Stores.settings.state.collectAsState()
@@ -37,7 +37,7 @@ fun main() {
                         if (e is PlaylistImports.Done) Notification.Type.Info else Notification.Type.Error))
             }
         }
-        fun quit() { ListenTogether.leaveRoom(); Mpris.stop(); Player.release(); Stores.flushAll(); exitApplication() }
+        fun quit() { PlaylistImports.cancel(); ListenTogether.leaveRoom(); Mpris.stop(); Player.release(); Stores.flushAll(); exitApplication() }
         DisposableEffect(Unit) {
             Mpris.start(
                 onRaise = { javax.swing.SwingUtilities.invokeLater { visible = true } },
