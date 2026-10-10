@@ -67,6 +67,8 @@ import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.Pause
@@ -260,7 +262,7 @@ private fun GuestBadge() = Row(verticalAlignment = Alignment.CenterVertically, h
 
 /** Bottom mini player. */
 @Composable
-fun PlayerBar(onOpenFull: () -> Unit, onOpenQueue: () -> Unit, onOpenLyrics: () -> Unit) {
+fun PlayerBar(onOpenFull: () -> Unit, onOpenQueue: () -> Unit, onOpenLyrics: () -> Unit, onFullscreen: () -> Unit) {
     val s by Player.state.collectAsState()
     val guest = isGuest()
     val song = s.current
@@ -289,10 +291,11 @@ fun PlayerBar(onOpenFull: () -> Unit, onOpenQueue: () -> Unit, onOpenLyrics: () 
                     Transport(s, guest, big = false)
                     SeekBar(s, enabled = !guest, Modifier.widthIn(max = 560.dp))
                 }
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                Row(horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onOpenLyrics, enabled = song != null) { Icon(Icons.Default.Lyrics, "Lyrics") }
                     IconButton(onOpenQueue) { Icon(Icons.AutoMirrored.Filled.QueueMusic, "Queue") }
                     VolumeControl(s)
+                    FullscreenButton(false, onFullscreen)
                 }
             }
         }
@@ -336,7 +339,15 @@ fun MobilePlayerBar(onOpenFull: () -> Unit) {
 enum class PlayerPage { NOW_PLAYING, LYRICS, QUEUE }
 
 @Composable
-private fun MobileFullPlayer(onClose: () -> Unit, initialPage: PlayerPage) {
+private fun FullscreenButton(fullscreen: Boolean, onClick: () -> Unit) {
+    IconButton(onClick) {
+        Icon(if (fullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+            if (fullscreen) "Exit full screen (Esc)" else "Full screen (F11)")
+    }
+}
+
+@Composable
+private fun MobileFullPlayer(onClose: () -> Unit, initialPage: PlayerPage, fullscreen: Boolean, onToggleFullscreen: () -> Unit) {
     val s by Player.state.collectAsState()
     val guest = isGuest()
     var page by rememberSaveable(initialPage) { mutableStateOf(initialPage) }
@@ -349,6 +360,7 @@ private fun MobileFullPlayer(onClose: () -> Unit, initialPage: PlayerPage) {
                     Text(s.queueTitle ?: "Your queue", style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 SleepTimerButton(s, guest)
+                FullscreenButton(fullscreen, onToggleFullscreen)
             }
             PrimaryTabRow(selectedTabIndex = page.ordinal) {
                 PlayerPage.entries.forEach { item ->
@@ -390,10 +402,10 @@ private fun MobileFullPlayer(onClose: () -> Unit, initialPage: PlayerPage) {
     }
 }
 
-/** Full-screen now playing adapts to phone pages instead of squeezing two columns. */
+/** Expanded now playing adapts to phone pages instead of squeezing two columns. */
 @Composable
-fun FullPlayer(onClose: () -> Unit, compact: Boolean = false, initialPage: PlayerPage = PlayerPage.NOW_PLAYING) {
-    if (compact) return MobileFullPlayer(onClose, initialPage)
+fun FullPlayer(onClose: () -> Unit, fullscreen: Boolean, onToggleFullscreen: () -> Unit, compact: Boolean = false, initialPage: PlayerPage = PlayerPage.NOW_PLAYING) {
+    if (compact) return MobileFullPlayer(onClose, initialPage, fullscreen, onToggleFullscreen)
     val s by Player.state.collectAsState()
     val guest = isGuest()
     var tab by remember { mutableStateOf(0) } // 0 lyrics, 1 queue
@@ -405,6 +417,7 @@ fun FullPlayer(onClose: () -> Unit, compact: Boolean = false, initialPage: Playe
                 IconButton(onClose) { Icon(Icons.Default.ExpandMore, "Close player") }
                 Text(s.queueTitle ?: "Now playing", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (guest) GuestBadge()
+                FullscreenButton(fullscreen, onToggleFullscreen)
             }
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
                 Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {

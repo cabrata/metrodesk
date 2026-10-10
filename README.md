@@ -25,6 +25,7 @@ Both platforms compile the same Utaloom UI, library, extraction, lyrics and List
 - Home feed, Explore (new releases, moods & genres, charts), search with suggestions and filters
 - Albums, artists, playlists, podcasts, "Listen again"
 - Player with queue, shuffle, repeat, radio (endless autoplay), sleep timer, volume normalization
+- Native full-screen player that hides the window title bar and system taskbar. Use the full-screen button or F11, and Esc to exit
 - Synced lyrics with word-by-word (karaoke) highlighting. Providers: BetterLyrics, LrcLib, KuGou, Paxsenix, LyricsPlus (off by default), Zemer, YouTube subtitles, YouTube Music. They are tried in order with fallback, and you can reorder or toggle them in Settings → Lyrics providers
 - Library: liked songs, history, local playlists, saved albums/artists/playlists
 - Optional YouTube account login (cookie) to see your own library and recommendations
@@ -66,6 +67,8 @@ Desktop packages bundle their own Java runtime.
 | Ctrl + → / ← | Next / previous |
 | Ctrl + ↑ / ↓ | Volume up / down |
 | Ctrl + L | Like current song |
+| F11 | Toggle full-screen player (with a current song) |
+| Esc | Exit full screen |
 | Alt + ← | Back |
 | Media keys | Play/pause, next, previous |
 

@@ -64,7 +64,7 @@ fun applySession() {
 private enum class Panel { NONE, QUEUE, LYRICS }
 
 @Composable
-fun UtaloomApp(vlcError: String? = null) {
+fun UtaloomApp(vlcError: String? = null, fullscreen: Boolean, onFullscreenChange: (Boolean) -> Unit) {
     val settings by Stores.settings.state.collectAsState()
     val player by Player.state.collectAsState()
     val lt by ListenTogether.state.collectAsState()
@@ -72,6 +72,7 @@ fun UtaloomApp(vlcError: String? = null) {
     val dark = when (settings.darkMode) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
     var seed by remember { mutableStateOf(DefaultSeed) }
     var fullPlayer by rememberSaveable { mutableStateOf(false) }
+    val showFullPlayer = fullPlayer || fullscreen
     var fullPage by rememberSaveable { mutableStateOf(PlayerPage.NOW_PLAYING) }
     var panel by rememberSaveable { mutableStateOf(Panel.NONE) }
     val snackbar = remember { SnackbarHostState() }
@@ -79,8 +80,19 @@ fun UtaloomApp(vlcError: String? = null) {
     val keyboard = LocalSoftwareKeyboardController.current
     val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
-    LaunchedEffect(player.current) {
-        if (player.current == null) { fullPlayer = false; panel = Panel.NONE }
+    LaunchedEffect(player.current, fullscreen) {
+        if (player.current == null) {
+            fullPlayer = false
+            panel = Panel.NONE
+            if (fullscreen) onFullscreenChange(false)
+        }
+    }
+    LaunchedEffect(fullscreen) {
+        if (fullscreen) {
+            fullPlayer = true
+            focus.clearFocus()
+            keyboard?.hide()
+        }
     }
 
     setSingletonImageLoaderFactory { ctx -> ImageLoader.Builder(ctx).components { add(KtorNetworkFetcherFactory()) }.build() }
@@ -157,14 +169,21 @@ fun UtaloomApp(vlcError: String? = null) {
                             onOpenFull = { fullPage = PlayerPage.NOW_PLAYING; fullPlayer = true },
                             onOpenQueue = { panel = if (panel == Panel.QUEUE) Panel.NONE else Panel.QUEUE },
                             onOpenLyrics = { panel = if (panel == Panel.LYRICS) Panel.NONE else Panel.LYRICS },
+                            onFullscreen = { fullPage = PlayerPage.NOW_PLAYING; fullPlayer = true; onFullscreenChange(true) },
                         )
                     }
                     if (compact && !keyboardVisible) BottomNavigation()
                 }
-                AnimatedVisibility(fullPlayer && player.current != null) {
-                    FullPlayer(onClose = { fullPlayer = false }, compact = compact, initialPage = fullPage)
+                AnimatedVisibility(showFullPlayer && player.current != null) {
+                    FullPlayer(
+                        onClose = { fullPlayer = false; onFullscreenChange(false) },
+                        fullscreen = fullscreen,
+                        onToggleFullscreen = { fullPlayer = true; onFullscreenChange(!fullscreen) },
+                        compact = compact,
+                        initialPage = fullPage,
+                    )
                 }
-                val bottom = if (fullPlayer || keyboardVisible) 16.dp else if (compact) {
+                val bottom = if (showFullPlayer || keyboardVisible) 16.dp else if (compact) {
                     if (player.current != null) 152.dp else 88.dp
                 } else if (player.current != null) 96.dp else 16.dp
                 SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = bottom))

@@ -16,15 +16,24 @@ import com.utaloom.ui.Nav
 import com.utaloom.ui.UtaloomApp
 import com.utaloom.ui.applySession
 
-fun main() {
+fun main() = runApp(exitProcessOnExit = true)
+
+internal fun runApp(exitProcessOnExit: Boolean) {
     applySession()
     val vlcError = NativeLibs.discoverVlc()
     if (vlcError == null) Player.init() else System.err.println(vlcError)
     Runtime.getRuntime().addShutdownHook(Thread { PlaylistImports.cancel(); Mpris.stop(); Player.release(); Stores.flushAll() })
-    application {
+    application(exitProcessOnExit = exitProcessOnExit) {
         var visible by remember { mutableStateOf(true) }
         val settings by Stores.settings.state.collectAsState()
         val windowState = rememberWindowState(size = DpSize(1280.dp, 820.dp))
+        var previousPlacement by remember { mutableStateOf(WindowPlacement.Floating) }
+        val fullscreen = windowState.placement == WindowPlacement.Fullscreen
+        fun setFullscreen(enabled: Boolean) {
+            if (enabled == (windowState.placement == WindowPlacement.Fullscreen)) return
+            if (enabled) previousPlacement = windowState.placement
+            windowState.placement = if (enabled) WindowPlacement.Fullscreen else previousPlacement
+        }
         val player by Player.state.collectAsState()
         val icon = painterResource("icon.png")
         val trayState = rememberTrayState()
@@ -63,10 +72,30 @@ fun main() {
             state = windowState,
             title = player.current?.let { "${it.title} • ${it.artistText} - Utaloom" } ?: "Utaloom",
             icon = icon,
-            onPreviewKeyEvent = ::shortcut,
+            onPreviewKeyEvent = { e ->
+                val isFullscreen = windowState.placement == WindowPlacement.Fullscreen
+                when {
+                    e.type == KeyEventType.KeyDown && e.key == Key.F11 && (Player.state.value.current != null || isFullscreen) -> {
+                        setFullscreen(!isFullscreen)
+                        true
+                    }
+                    e.type == KeyEventType.KeyDown && e.key == Key.Escape && isFullscreen -> {
+                        setFullscreen(false)
+                        true
+                    }
+                    else -> shortcut(e)
+                }
+            },
         ) {
             window.minimumSize = java.awt.Dimension(900, 600)
-            UtaloomApp(vlcError)
+            SideEffect {
+                // ponytail: Compose 1.12.1 doesn't clear fullscreen on maximize; remove when its native transition is fixed.
+                if (windowState.placement == WindowPlacement.Maximized && window.placement == WindowPlacement.Fullscreen) {
+                    window.placement = WindowPlacement.Floating
+                    window.placement = WindowPlacement.Maximized
+                }
+            }
+            UtaloomApp(vlcError, fullscreen, ::setFullscreen)
         }
     }
 }
