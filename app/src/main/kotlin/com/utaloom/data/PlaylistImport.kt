@@ -43,20 +43,22 @@ object PlaylistImports {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
 
-    fun start(url: String) {
+    fun start(url: String): Unit = synchronized(this) {
         if (job?.isActive == true) return
         _progress.value = Progress()
-        // LAZY so `self` is assigned before the body (and its finally) can run.
+        // LAZY so `job` is assigned before the body (and its finally) can run.
         val self = scope.launch(start = CoroutineStart.LAZY) {
             val me = coroutineContext[Job]
+            fun mine() = job === me
             try {
-                val r = importRemotePlaylist(url) { d, t -> if (job === me) _progress.update { it?.copy(done = d, total = t) } }
-                val id = Library.createPlaylist(r.playlist.name, r.playlist.songs)
+                val r = importRemotePlaylist(url) { d, t -> synchronized(this@PlaylistImports) { if (mine()) _progress.update { it?.copy(done = d, total = t) } } }
+                // Cancelled while matching: don't create the playlist.
+                val id = synchronized(this@PlaylistImports) { if (mine()) Library.createPlaylist(r.playlist.name, r.playlist.songs) else null } ?: return@launch
                 events.emit(Done(id, r.playlist.name, r.playlist.songs.size, r.missing.size, r.note, isBackground()))
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
-                events.emit(Failed((e as? IllegalArgumentException)?.message ?: "Import failed. Check the link and your connection.", isBackground()))
-            } finally { if (job === me) { _progress.value = null; job = null } }
+                if (mine()) events.emit(Failed((e as? IllegalArgumentException)?.message ?: "Import failed. Check the link and your connection.", isBackground()))
+            } finally { synchronized(this@PlaylistImports) { if (mine()) { _progress.value = null; job = null } } }
         }
         job = self
         self.start()
@@ -65,7 +67,7 @@ object PlaylistImports {
     private fun isBackground() = _progress.value?.background == true
     fun toBackground() = _progress.update { it?.copy(background = true) }
     // A blocking HTTP call may still be finishing; detach it so the UI clears now and a new import can start.
-    fun cancel() { job?.cancel(); job = null; _progress.value = null }
+    fun cancel(): Unit = synchronized(this) { job?.cancel(); job = null; _progress.value = null }
 
     fun summary(e: Event) = when (e) {
         is Done -> "Imported \"${e.name}\": ${e.songs} songs" + (if (e.missing > 0) ", ${e.missing} not found on YouTube Music" else "") + (e.note?.let { ". $it" } ?: "")
