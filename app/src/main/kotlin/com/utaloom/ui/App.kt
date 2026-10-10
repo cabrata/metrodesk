@@ -34,6 +34,7 @@ import coil3.compose.LocalPlatformContext
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.ImageRequest
+import com.utaloom.data.PlaylistImports
 import com.utaloom.data.Stores
 import com.utaloom.innertube.YouTube
 import com.utaloom.innertube.models.YouTubeLocale
@@ -103,6 +104,13 @@ fun UtaloomApp(vlcError: String? = null) {
         if (vlcError != null) snackbar.showSnackbar(vlcError, duration = SnackbarDuration.Indefinite)
     }
     LaunchedEffect(Unit) {
+        PlaylistImports.events.collect { e ->
+            val r = snackbar.showSnackbar(PlaylistImports.summary(e), actionLabel = if (e is PlaylistImports.Done) "Open" else null, withDismissAction = true, duration = SnackbarDuration.Long)
+            if (r == SnackbarResult.ActionPerformed && e is PlaylistImports.Done) Nav.go(Screen.LocalPlaylist(e.playlistId))
+        }
+    }
+    val importing by PlaylistImports.progress.collectAsState()
+    LaunchedEffect(Unit) {
         val update = withContext(Dispatchers.IO) { runCatching { com.utaloom.platform.Updates.check() }.getOrNull() } ?: return@LaunchedEffect
         val r = snackbar.showSnackbar("Utaloom ${update.tag_name} is available (you have ${com.utaloom.platform.Updates.current})", actionLabel = "Download", withDismissAction = true, duration = SnackbarDuration.Indefinite)
         if (r == SnackbarResult.ActionPerformed) com.utaloom.platform.Updates.open(update.html_url)
@@ -126,6 +134,12 @@ fun UtaloomApp(vlcError: String? = null) {
                         val contentModifier = if (compact) Modifier else Modifier.padding(top = 8.dp, end = 8.dp).clip(RoundedCornerShape(20.dp))
                         Column(Modifier.weight(1f).fillMaxHeight().then(contentModifier).background(MaterialTheme.colorScheme.surfaceContainerLow)) {
                             TopBar(compact)
+                            importing?.takeIf { it.background }?.let { p ->
+                                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    ImportProgress(p, Modifier.weight(1f))
+                                    TextButton(PlaylistImports::cancel) { Text("Cancel") }
+                                }
+                            }
                             Box(Modifier.weight(1f)) { Content() }
                         }
                         if (!compact) AnimatedVisibility(panel != Panel.NONE) {

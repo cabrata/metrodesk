@@ -6,6 +6,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
+import com.utaloom.data.PlaylistImports
 import com.utaloom.data.Stores
 import com.utaloom.platform.Mpris
 import com.utaloom.platform.NativeLibs
@@ -26,6 +27,16 @@ fun main() {
         val windowState = rememberWindowState(size = DpSize(1280.dp, 820.dp))
         val player by Player.state.collectAsState()
         val icon = painterResource("icon.png")
+        val trayState = rememberTrayState()
+        val importing by PlaylistImports.progress.collectAsState()
+        // Background imports report through the system tray, since the user may have hidden the window.
+        LaunchedEffect(Unit) {
+            PlaylistImports.events.collect { e ->
+                if (isTraySupported && (e.background || !visible)) trayState.sendNotification(
+                    Notification(if (e is PlaylistImports.Done) "Playlist imported" else "Playlist import failed", PlaylistImports.summary(e),
+                        if (e is PlaylistImports.Done) Notification.Type.Info else Notification.Type.Error))
+            }
+        }
         fun quit() { ListenTogether.leaveRoom(); Mpris.stop(); Player.release(); Stores.flushAll(); exitApplication() }
         DisposableEffect(Unit) {
             Mpris.start(
@@ -35,17 +46,19 @@ fun main() {
             onDispose { Mpris.stop() }
         }
 
-        if (isTraySupported) Tray(icon, tooltip = player.current?.let { "${it.title} • ${it.artistText}" } ?: "Utaloom", onAction = { visible = true }, menu = {
+        if (isTraySupported) Tray(icon, state = trayState, tooltip = importing?.let { p -> if (p.total == 0) "Utaloom: importing playlist…" else "Utaloom: importing ${p.done} / ${p.total}" }
+            ?: player.current?.let { "${it.title} • ${it.artistText}" } ?: "Utaloom", onAction = { visible = true }, menu = {
             Item(if (player.isPlaying) "Pause" else "Play", onClick = Player::playPause)
             Item("Next", onClick = { Player.next() })
             Item("Previous", onClick = Player::previous)
+            if (importing != null) { Separator(); Item("Cancel playlist import", onClick = PlaylistImports::cancel) }
             Separator()
             Item("Show Utaloom", onClick = { visible = true })
             Item("Quit", onClick = ::quit)
         })
 
         Window(
-            onCloseRequest = { if (isTraySupported && settings.minimizeToTray && player.current != null) visible = false else quit() },
+            onCloseRequest = { if (isTraySupported && settings.minimizeToTray && (player.current != null || importing != null)) visible = false else quit() },
             visible = visible,
             state = windowState,
             title = player.current?.let { "${it.title} • ${it.artistText} - Utaloom" } ?: "Utaloom",

@@ -25,8 +25,7 @@ import com.utaloom.data.SavedRef
 import com.utaloom.data.Song
 import com.utaloom.data.Stores
 import com.utaloom.data.toSong
-import com.utaloom.data.RemoteImport
-import com.utaloom.data.importRemotePlaylist
+import com.utaloom.data.PlaylistImports
 import com.utaloom.playback.Downloads
 import com.utaloom.playback.Player
 import com.utaloom.innertube.YouTube
@@ -164,6 +163,7 @@ fun LibraryScreen() {
     var fileBusy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var linkImport by remember { mutableStateOf(false) }
+    val importing by PlaylistImports.progress.collectAsState()
     val scope = rememberCoroutineScope()
     @Composable
     fun LibraryActions() {
@@ -177,7 +177,7 @@ fun LibraryScreen() {
                 finally { fileBusy = false }
             }
         }, enabled = !fileBusy) { Text(if (fileBusy) "Importing…" else "Import JSON") }
-        TextButton({ linkImport = true }) { Text("Import from Spotify / YT Music") }
+        TextButton({ linkImport = true }) { Text(if (importing != null) "Importing…" else "Import from Spotify / YT Music") }
     }
     @Composable
     fun Header() {
@@ -235,9 +235,7 @@ fun LibraryScreen() {
         }
     }
     if (create) PlaylistNameDialog("New playlist", onDismiss = { create = false }) { Nav.go(Screen.LocalPlaylist(Library.createPlaylist(it))) }
-    if (linkImport) LinkImportDialog({ linkImport = false }) { linkImport = false; imported = it.playlist
-        val lines = listOfNotNull(it.note, it.missing.takeIf { m -> m.isNotEmpty() }?.let { m -> "${m.size} tracks had no YouTube Music match:\n" + m.take(20).joinToString("\n") + if (m.size > 20) "\n…" else "" })
-        if (lines.isNotEmpty()) message = lines.joinToString("\n\n") }
+    if (linkImport) LinkImportDialog { linkImport = false }
     imported?.let { p -> AlertDialog(onDismissRequest = { imported = null }, title = { Text("Import ${p.name}?") },
         text = { Text("Create a new local playlist with ${p.songs.size} songs. Existing playlists will not be changed.") },
         confirmButton = { TextButton({ Nav.go(Screen.LocalPlaylist(Library.createPlaylist(p.name, p.songs))); imported = null }) { Text("Import") } },
@@ -474,35 +472,31 @@ private fun AddPlaylistSongsDialog(id: String, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun LinkImportDialog(onDismiss: () -> Unit, onDone: (RemoteImport) -> Unit) {
+private fun LinkImportDialog(onDismiss: () -> Unit) {
     var url by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    var progress by remember { mutableStateOf("") }
-    var fraction by remember { mutableStateOf<Float?>(null) }
-    var job by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-    AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text("Import playlist from link") }, text = {
+    val progress by PlaylistImports.progress.collectAsState()
+    // Finished or failed while the dialog is open: open the new playlist, the app shell shows the summary.
+    LaunchedEffect(Unit) { PlaylistImports.events.collect { e -> if (e is PlaylistImports.Done) Nav.go(Screen.LocalPlaylist(e.playlistId)); onDismiss() } }
+    val p = progress
+    AlertDialog(onDismissRequest = { if (p == null) onDismiss() }, title = { Text("Import playlist from link") }, text = {
         Column(Modifier.widthIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(url, { url = it }, Modifier.fillMaxWidth(), singleLine = true, enabled = !busy, label = { Text("Spotify or YouTube Music link") })
-            Text("Public playlists only. Spotify tracks are matched on YouTube Music, so large playlists take a while.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (busy) {
-                fraction?.let { f -> LinearProgressIndicator(progress = { f }, modifier = Modifier.fillMaxWidth()) }
-                    ?: LinearProgressIndicator(Modifier.fillMaxWidth())
-                Text(progress.ifEmpty { "Loading…" }, style = MaterialTheme.typography.bodySmall)
-            }
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            OutlinedTextField(url, { url = it }, Modifier.fillMaxWidth(), singleLine = true, enabled = p == null, label = { Text("Spotify or YouTube Music link") })
+            Text("Public playlists only. Spotify tracks are matched on YouTube Music, so large playlists take a while. You can keep using Utaloom while it runs in the background.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (p != null) ImportProgress(p)
         }
-    }, confirmButton = { TextButton({
-        busy = true; error = null; progress = ""; fraction = null
-        job = scope.launch {
-            try { onDone(importRemotePlaylist(url) { d, t -> progress = "Matching $d / $t tracks (${d * 100 / t}%)"; fraction = d.toFloat() / t }) }
-            catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = (e as? IllegalArgumentException)?.message ?: "Import failed. Check the link and your connection." }
-            finally { busy = false }
-        }
-    }, enabled = !busy && url.isNotBlank()) { Text(if (busy) "Importing…" else "Import") } },
-        dismissButton = { TextButton({ job?.cancel(); onDismiss() }) { Text("Cancel") } })
+    }, confirmButton = {
+        if (p == null) TextButton({ PlaylistImports.start(url) }, enabled = url.isNotBlank()) { Text("Import") }
+        else TextButton({ PlaylistImports.toBackground(); onDismiss() }) { Text("Run in background") }
+    }, dismissButton = { TextButton({ PlaylistImports.cancel(); onDismiss() }) { Text("Cancel") } })
+}
+
+@Composable
+internal fun ImportProgress(p: PlaylistImports.Progress, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (p.total == 0) LinearProgressIndicator(Modifier.fillMaxWidth())
+        else LinearProgressIndicator(progress = { p.done.toFloat() / p.total }, modifier = Modifier.fillMaxWidth())
+        Text(if (p.total == 0) "Loading playlist…" else "Matching ${p.done} / ${p.total} tracks (${p.done * 100 / p.total}%)", style = MaterialTheme.typography.bodySmall)
+    }
 }
 
 internal fun libraryScreensSelfCheck() {

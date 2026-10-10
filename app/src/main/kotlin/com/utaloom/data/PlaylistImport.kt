@@ -2,10 +2,20 @@ package com.utaloom.data
 
 import com.utaloom.innertube.YouTube
 import com.utaloom.innertube.models.SongItem
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -19,6 +29,49 @@ import kotlin.math.abs
 
 /** Result of importing a remote playlist. [missing] = tracks with no YouTube Music match, [note] = non-fatal warning. */
 data class RemoteImport(val playlist: LocalPlaylist, val missing: List<String>, val note: String? = null)
+
+/** App-wide link import that survives closing the dialog, so it can keep running in the background. One at a time. */
+object PlaylistImports {
+    data class Progress(val done: Int = 0, val total: Int = 0, val background: Boolean = false)
+    sealed interface Event { val background: Boolean }
+    data class Done(val playlistId: String, val name: String, val songs: Int, val missing: Int, val note: String?, override val background: Boolean) : Event
+    data class Failed(val message: String, override val background: Boolean) : Event
+
+    private val _progress = MutableStateFlow<Progress?>(null)
+    val progress = _progress.asStateFlow()
+    val events = MutableSharedFlow<Event>(extraBufferCapacity = 8)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var job: Job? = null
+
+    fun start(url: String) {
+        if (job?.isActive == true) return
+        _progress.value = Progress()
+        // LAZY so `self` is assigned before the body (and its finally) can run.
+        val self = scope.launch(start = CoroutineStart.LAZY) {
+            val me = coroutineContext[Job]
+            try {
+                val r = importRemotePlaylist(url) { d, t -> if (job === me) _progress.update { it?.copy(done = d, total = t) } }
+                val id = Library.createPlaylist(r.playlist.name, r.playlist.songs)
+                events.emit(Done(id, r.playlist.name, r.playlist.songs.size, r.missing.size, r.note, isBackground()))
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                events.emit(Failed((e as? IllegalArgumentException)?.message ?: "Import failed. Check the link and your connection.", isBackground()))
+            } finally { if (job === me) { _progress.value = null; job = null } }
+        }
+        job = self
+        self.start()
+    }
+
+    private fun isBackground() = _progress.value?.background == true
+    fun toBackground() = _progress.update { it?.copy(background = true) }
+    // A blocking HTTP call may still be finishing; detach it so the UI clears now and a new import can start.
+    fun cancel() { job?.cancel(); job = null; _progress.value = null }
+
+    fun summary(e: Event) = when (e) {
+        is Done -> "Imported \"${e.name}\": ${e.songs} songs" + (if (e.missing > 0) ", ${e.missing} not found on YouTube Music" else "") + (e.note?.let { ". $it" } ?: "")
+        is Failed -> e.message
+    }
+}
 
 private const val UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 private val http by lazy { HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).connectTimeout(Duration.ofSeconds(15)).build() }
