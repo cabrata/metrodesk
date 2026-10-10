@@ -1,6 +1,7 @@
 package com.utaloom.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -24,6 +25,7 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
@@ -163,7 +165,7 @@ private fun Sidebar() {
     val lt by ListenTogether.state.collectAsState()
     val settings by Stores.settings.state.collectAsState()
     NavigationRail(Modifier.fillMaxHeight().padding(vertical = 8.dp), containerColor = Color.Transparent, windowInsets = WindowInsets(0, 0, 0, 0), header = {
-        Icon(Icons.Default.MusicNote, "Utaloom", Modifier.size(44.dp).padding(4.dp), tint = MaterialTheme.colorScheme.primary)
+        Image(painterResource("icon.png"), "Utaloom", Modifier.size(44.dp).padding(4.dp))
     }) {
         Spacer(Modifier.height(12.dp))
         RailItem("Home", Icons.Default.Home, current == Screen.Home) { Nav.root(Screen.Home) }
