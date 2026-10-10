@@ -17,8 +17,8 @@ import java.net.http.HttpResponse
 import java.time.Duration
 import kotlin.math.abs
 
-/** Result of importing a remote playlist. [missing] = tracks with no YouTube Music match. */
-data class RemoteImport(val playlist: LocalPlaylist, val missing: List<String>)
+/** Result of importing a remote playlist. [missing] = tracks with no YouTube Music match, [note] = non-fatal warning. */
+data class RemoteImport(val playlist: LocalPlaylist, val missing: List<String>, val note: String? = null)
 
 private const val UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 private val http by lazy { HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).connectTimeout(Duration.ofSeconds(15)).build() }
@@ -57,22 +57,69 @@ private suspend fun importYouTube(id: String): RemoteImport {
 }
 
 private data class SpTrack(val title: String, val artist: String, val durationSec: Int)
+private class SpEmbed(val name: String, val tracks: List<SpTrack>, val token: String?)
 
-// ponytail: scrapes the public embed page (no API key). Embed only lists ~100 tracks; longer playlists need the Spotify Web API + OAuth.
-private fun spotifyEmbed(type: String, id: String): Pair<String, List<SpTrack>> {
+// ponytail: scrapes the public embed page (no API key). Embed lists at most 100 tracks; spotifyAllTracks pages the rest.
+private fun spotifyEmbed(type: String, id: String): SpEmbed {
     val res = get("https://open.spotify.com/embed/$type/$id")
     require(res.statusCode() == 200) { "Spotify $type not found (HTTP ${res.statusCode()})" }
     val raw = Regex("<script id=\"__NEXT_DATA__\" type=\"application/json\">(.+?)</script>", RegexOption.DOT_MATCHES_ALL).find(res.body())?.groupValues?.get(1)
         ?: error("Could not read Spotify page. Is the playlist public?")
-    val entity = Json.parseToJsonElement(raw).jsonObject["props"]?.jsonObject?.get("pageProps")?.jsonObject?.get("state")?.jsonObject
-        ?.get("data")?.jsonObject?.get("entity")?.jsonObject ?: error("Spotify $type not found or private")
+    val state = Json.parseToJsonElement(raw).jsonObject["props"]?.jsonObject?.get("pageProps")?.jsonObject?.get("state")?.jsonObject
+    val entity = state?.get("data")?.jsonObject?.get("entity")?.jsonObject ?: error("Spotify $type not found or private")
+    val token = state["settings"]?.jsonObject?.get("session")?.jsonObject?.get("accessToken")?.jsonPrimitive?.contentOrNull
     val tracks = entity["trackList"]?.jsonArray.orEmpty().mapNotNull { el ->
         val t = el.jsonObject
         val title = t["title"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
         SpTrack(title, t["subtitle"]?.jsonPrimitive?.contentOrNull.orEmpty(), ((t["duration"]?.jsonPrimitive?.longOrNull ?: 0) / 1000).toInt())
     }
-    return (entity["name"]?.jsonPrimitive?.contentOrNull ?: "Spotify $type") to tracks
+    return SpEmbed(entity["name"]?.jsonPrimitive?.contentOrNull ?: "Spotify $type", tracks, token)
 }
+
+// ponytail: unofficial web-player GraphQL with the embed's anonymous token. The official Web API (OAuth) only returns
+// items of playlists the user owns since Feb 2026 and caps dev apps at 5 users, so it can't serve public playlists.
+// The persisted-query hash rotates; it is re-read from the web player bundle when Spotify answers 412.
+private var playlistHash = "8964e8eafb21aa992a7d951d256d83285c04be2105d209262901de70cb97584a"
+
+private fun refreshPlaylistHash() {
+    val home = get("https://open.spotify.com/").body()
+    for (js in Regex("https://open\\.spotifycdn\\.com/cdn/build/web-player/[^\"]+\\.js").findAll(home).map { it.value }.toSet()) {
+        Regex("\"fetchPlaylist\",\"query\",\"([a-f0-9]{64})\"").find(get(js).body())?.let { playlistHash = it.groupValues[1]; return }
+    }
+    error("Spotify playlist query not found")
+}
+
+private fun spotifyPage(id: String, token: String, offset: Int, retry: Boolean = true): Pair<Int, List<SpTrack>> {
+    val body = """{"operationName":"fetchPlaylist","variables":{"uri":"spotify:playlist:$id","offset":$offset,"limit":100,"enableWatchFeedEntrypoint":false},"extensions":{"persistedQuery":{"version":1,"sha256Hash":"$playlistHash"}}}"""
+    val res = http.send(HttpRequest.newBuilder(URI("https://api-partner.spotify.com/pathfinder/v2/query")).header("User-Agent", UA)
+        .header("Authorization", "Bearer $token").header("Content-Type", "application/json").timeout(Duration.ofSeconds(20))
+        .POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString())
+    if (res.statusCode() == 412 && retry) { refreshPlaylistHash(); return spotifyPage(id, token, offset, false) }
+    check(res.statusCode() == 200) { "Spotify HTTP ${res.statusCode()}" }
+    val content = Json.parseToJsonElement(res.body()).jsonObject["data"]?.jsonObject?.get("playlistV2")?.jsonObject?.get("content")?.jsonObject
+        ?: error("Spotify playlist unavailable")
+    val tracks = content["items"]?.jsonArray.orEmpty().mapNotNull { el ->
+        val d = el.jsonObject["itemV2"]?.jsonObject?.get("data")?.jsonObject ?: return@mapNotNull null
+        val title = d["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+        val artists = d["artists"]?.jsonObject?.get("items")?.jsonArray.orEmpty()
+            .mapNotNull { it.jsonObject["profile"]?.jsonObject?.get("name")?.jsonPrimitive?.contentOrNull }
+        val ms = d["trackDuration"]?.jsonObject?.get("totalMilliseconds")?.jsonPrimitive?.longOrNull ?: 0
+        SpTrack(title, artists.joinToString(", "), (ms / 1000).toInt())
+    }
+    return (content["totalCount"]?.jsonPrimitive?.intOrNull ?: 0) to tracks
+}
+
+/** All tracks of a public playlist, or null if the GraphQL route fails (caller keeps the embed's first 100). */
+private fun spotifyAllTracks(id: String, token: String): List<SpTrack>? = runCatching {
+    val out = mutableListOf<SpTrack>()
+    var total: Int
+    do {
+        val (count, page) = spotifyPage(id, token, out.size)
+        total = minOf(count, 20_000)
+        out += page
+    } while (page.isNotEmpty() && out.size < total)
+    out
+}.getOrNull()
 
 /** Among the top results: prefer a matching artist, then the closest duration. Rejects hits more than 30s off. */
 internal fun bestMatch(hits: List<SongItem>, durationSec: Int, artist: String = ""): SongItem? {
@@ -83,8 +130,12 @@ internal fun bestMatch(hits: List<SongItem>, durationSec: Int, artist: String = 
 }
 
 private suspend fun importSpotify(type: String, id: String, onProgress: (Int, Int) -> Unit): RemoteImport = coroutineScope {
-    val (name, tracks) = spotifyEmbed(type, id)
-    val gate = Semaphore(4)
+    val embed = spotifyEmbed(type, id)
+    val full = if (type == "playlist" && embed.tracks.size >= 100 && embed.token != null) spotifyAllTracks(id, embed.token) else null
+    val tracks = full ?: embed.tracks
+    val note = if (type == "playlist" && embed.tracks.size >= 100 && full == null) "Spotify only returned the first 100 tracks." else null
+    val name = embed.name
+    val gate = Semaphore(8)
     var done = 0
     val matched = tracks.map { t ->
         async {
@@ -97,7 +148,7 @@ private suspend fun importSpotify(type: String, id: String, onProgress: (Int, In
     }.awaitAll()
     val songs = matched.filterNotNull().map { it.toSong() }.distinctBy { it.id }
     val missing = tracks.zip(matched).filter { it.second == null }.map { "${it.first.title} - ${it.first.artist}" }
-    RemoteImport(LocalPlaylist("", name.trim().ifBlank { "Spotify $type" }.take(200), songs), missing)
+    RemoteImport(LocalPlaylist("", name.trim().ifBlank { "Spotify $type" }.take(200), songs), missing, note)
 }
 
 internal fun playlistImportSelfCheck() {

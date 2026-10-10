@@ -236,7 +236,8 @@ fun LibraryScreen() {
     }
     if (create) PlaylistNameDialog("New playlist", onDismiss = { create = false }) { Nav.go(Screen.LocalPlaylist(Library.createPlaylist(it))) }
     if (linkImport) LinkImportDialog({ linkImport = false }) { linkImport = false; imported = it.playlist
-        if (it.missing.isNotEmpty()) message = "${it.missing.size} tracks had no YouTube Music match:\n" + it.missing.take(20).joinToString("\n") + if (it.missing.size > 20) "\n…" else "" }
+        val lines = listOfNotNull(it.note, it.missing.takeIf { m -> m.isNotEmpty() }?.let { m -> "${m.size} tracks had no YouTube Music match:\n" + m.take(20).joinToString("\n") + if (m.size > 20) "\n…" else "" })
+        if (lines.isNotEmpty()) message = lines.joinToString("\n\n") }
     imported?.let { p -> AlertDialog(onDismissRequest = { imported = null }, title = { Text("Import ${p.name}?") },
         text = { Text("Create a new local playlist with ${p.songs.size} songs. Existing playlists will not be changed.") },
         confirmButton = { TextButton({ Nav.go(Screen.LocalPlaylist(Library.createPlaylist(p.name, p.songs))); imported = null }) { Text("Import") } },
@@ -482,7 +483,7 @@ private fun LinkImportDialog(onDismiss: () -> Unit, onDone: (RemoteImport) -> Un
     AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text("Import playlist from link") }, text = {
         Column(Modifier.widthIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(url, { url = it }, Modifier.fillMaxWidth(), singleLine = true, enabled = !busy, label = { Text("Spotify or YouTube Music link") })
-            Text("Public playlists only. Spotify tracks are matched on YouTube Music (first ~100 tracks).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Public playlists only. Spotify tracks are matched on YouTube Music, so large playlists take a while.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (busy) Text(progress.ifEmpty { "Loading…" })
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
