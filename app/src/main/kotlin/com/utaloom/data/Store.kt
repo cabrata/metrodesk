@@ -92,6 +92,9 @@ data class Settings(
     val lyricsTextSize: Int = 26,
     val minimizeToTray: Boolean = true,
 ) {
+    internal fun normalizeLegacyLtServerUrl() =
+        if (ltServerUrl.trim() == "wss://metrolist.caliph.dev/ws") copy(ltServerUrl = "wss://utaloom.caliph.dev/ws") else this
+
     /** Saved order first, then providers added in later versions. */
     val lyricsProviderOrder get() = lyricsOrder.filter { it in LyricsRepository.providers } + LyricsRepository.providers.filter { it !in lyricsOrder }
     val lyricsProviders get() = lyricsProviderOrder.filter { it !in lyricsDisabled }
@@ -164,6 +167,14 @@ object Stores {
     val settings = JsonStore(Paths.dir.resolve("settings.json"), ::Settings, Settings.serializer())
     val library = JsonStore(Paths.dir.resolve("library.json"), ::LibraryState, LibraryState.serializer())
     val queue = JsonStore(Paths.dir.resolve("queue.json"), ::PersistedQueue, PersistedQueue.serializer())
+
+    init {
+        val normalized = settings.value.normalizeLegacyLtServerUrl()
+        if (normalized != settings.value) {
+            settings.update { normalized }
+            settings.flush()
+        }
+    }
 
     fun flushAll() {
         settings.flush(); library.flush(); queue.flush()
